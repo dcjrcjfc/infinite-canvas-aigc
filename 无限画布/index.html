@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>AIGC Workflow - NanoBanana Final Fix</title>
+    <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+
+<div id="viewport">
+    <div id="canvas">
+        <svg id="svg-layer"><g id="links-container"></g><path id="temp-line" d=""></path></svg>
+    </div>
+</div>
+
+<div class="add-btn" id="ui-add-btn">＋</div>
+
+<div id="nodeMenu" class="node-menu">
+    <div class="menu-section-title">添加节点</div>
+    <div class="menu-item" data-type="text"><div class="icon-box">≡</div><div class="label">文本节点</div></div>
+    <div class="menu-item" data-type="image"><div class="icon-box">🖼️</div><div class="label">图片节点</div></div>
+    <div class="menu-item" data-type="video"><div class="icon-box">🎬</div><div class="label">视频节点</div></div>
+    <div class="menu-section-title">添加资源</div>
+    <div class="menu-item" id="global-upload-btn"><div class="icon-box">↑</div><div class="label">上传</div></div>
+</div>
+
+<input type="file" id="file-input">
+
+<script src="./script.js"></script>
+</body>
+</html>
+

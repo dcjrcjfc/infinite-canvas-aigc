@@ -1,0 +1,84 @@
+:root { --bg: #050505; --node-bg: #111112; --accent: #3b82f6; --border: #222; --text-dim: #666; --menu-bg: rgba(26, 26, 28, 0.98); }
+        * { box-sizing: border-box; user-select: none; outline: none; }
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; background: var(--bg); color: white; overflow: hidden; font-family: system-ui, sans-serif; }
+        #viewport { width: 100vw; height: 100vh; position: relative; overflow: hidden; cursor: grab; touch-action: none; }
+        #canvas { position: absolute; top: 0; left: 0; width: 10000px; height: 10000px; transform-origin: 0 0; background-image: radial-gradient(#1a1a1a 1.2px, transparent 1.2px); background-size: 28px 28px; will-change: transform; }
+        #svg-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 5; }
+
+        /* --- 菜单 --- */
+        .node-menu { position: fixed; left: 85px; top: 50%; transform: translateY(-50%); width: 260px; background: var(--menu-bg); border: 1px solid var(--border); backdrop-filter: blur(30px); border-radius: 18px; padding: 12px; display: none; z-index: 1001; box-shadow: 0 30px 60px rgba(0,0,0,0.8); }
+        .menu-section-title { font-size: 11px; color: var(--text-dim); padding: 10px 12px; text-transform: uppercase; }
+        .menu-item { display: flex; align-items: center; gap: 14px; padding: 10px 12px; border-radius: 12px; cursor: pointer; transition: 0.2s; }
+        .menu-item:hover { background: rgba(255,255,255,0.06); }
+        .menu-item .icon-box { width: 36px; height: 36px; background: rgba(255,255,255,0.05); border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 18px; color: #fff; }
+        .menu-item .label { font-size: 14px; font-weight: 500; color: #eee; }
+
+        /* --- 节点 --- */
+        .node { position: absolute; width: 360px; z-index: 10; display: flex; flex-direction: column; padding: 20px 0; will-change: left, top; transition: filter 0.16s ease, opacity 0.16s ease; }
+        .node.dragging { filter: brightness(1.06); }
+        .node.selected .node-box { border-color: var(--accent); }
+        .node-label { font-size: 11px; color: var(--text-dim); margin-bottom: 10px; padding-left: 2px; }
+        .box-wrapper { position: relative; width: 100%; }
+        .node-upload-pill { position: absolute; top: 0; left: 50%; transform: translate(-50%, -50%); background: #1a1a1c; padding: 4px 14px; border-radius: 20px; font-size: 10px; color: #ccc; border: 1px solid #333; cursor: pointer; z-index: 50; }
+        .connector { position: absolute; width: 22px; height: 22px; border: 1px solid #333; border-radius: 50%; background: #000; color: #444; display: flex; align-items: center; justify-content: center; font-size: 12px; cursor: crosshair; z-index: 50; transition: transform 0.15s ease, border-color 0.15s ease, background-color 0.15s ease; }
+        .connector:hover { border-color: #4a4a4a; }
+        .connector.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+        .conn-left { left: 0; top: 50%; transform: translate(-50%, -50%); }
+        .conn-right { right: 0; top: 50%; transform: translate(50%, -50%); }
+        .conn-left:hover { transform: translate(-50%, -50%) scale(1.06); }
+        .conn-right:hover { transform: translate(50%, -50%) scale(1.06); }
+        .node-box { width: 100%; min-height: 120px; background: var(--node-bg); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; display: flex; align-items: center; justify-content: center; transition: border-color 0.16s ease, box-shadow 0.16s ease; }
+        .node-box img, .node-box video { width: 100%; height: auto; display: block; }
+        .node.new-result { animation: pulse-blue 2s ease-out; }
+        @keyframes pulse-blue { 0% { box-shadow: 0 0 30px var(--accent); } 100% { box-shadow: none; } }
+
+        /* --- 指令条 & 比例选择 --- */
+        .ai-panel { margin-top: 14px; width: 100%; background: #161618; border: 1px solid var(--border); border-radius: 18px; padding: 14px; position: relative; }
+        
+        /* === 新增：参考图样式 === */
+        .ref-toolbar { display: flex; align-items: center; gap: 8px; padding-bottom: 10px; }
+        .ref-container { display: flex; gap: 8px; flex-wrap: wrap; flex: 1; min-height: 32px; }
+        .ref-container:empty::before { content: "参考图会自动流转到这里"; font-size: 11px; color: #555; align-self: center; }
+        .ref-thumb-wrapper { position: relative; width: 32px; height: 32px; border-radius: 6px; overflow: hidden; border: 1px solid #444; background: #000; }
+        .ref-thumb-wrapper img, .ref-thumb-wrapper video { width: 100%; height: 100%; object-fit: cover; }
+        .ref-remove-btn { position: absolute; top: 0; right: 0; width: 14px; height: 14px; border: none; border-radius: 0 0 0 6px; background: rgba(0,0,0,0.72); color: #d8d8d8; font-size: 10px; line-height: 14px; cursor: pointer; }
+        .ref-add-btn { width: 32px; height: 32px; border: 1px solid #383838; border-radius: 8px; background: #202124; color: #9e9e9e; font-size: 18px; line-height: 1; cursor: pointer; flex: 0 0 auto; }
+        .ref-add-btn:hover { border-color: #555; color: #d6d6d6; }
+        /* ======================== */
+
+        .ai-input { width: 100%; background: transparent; border: none; color: #fff; outline: none; resize: none; font-size: 14px; min-height: 45px; user-select: text;}
+        .ai-footer { margin-top: 10px; display: flex; justify-content: space-between; align-items: center; padding-top: 10px; border-top: 1px solid #222; }
+        .footer-btn { background: #222; border-radius: 10px; padding: 6px 12px; font-size: 11px; color: #999; cursor: pointer; }
+        .send-btn { width: 30px; height: 30px; background: #333; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; color: #666; }
+        .send-btn.loading { animation: pulse 1s infinite; color: #fff; pointer-events: none; }
+        @keyframes pulse { 50% { opacity: 0.3; } }
+        .ratio-popover { position: absolute; bottom: 85px; left: 50%; transform: translateX(-50%); width: 300px; background: #1c1c1f; border: 1px solid #333; border-radius: 16px; padding: 18px; display: none; z-index: 100; box-shadow: 0 20px 50px rgba(0,0,0,0.8); }
+        .ratio-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-top: 14px; }
+        .ratio-item { display: flex; flex-direction: column; align-items: center; gap: 6px; cursor: pointer; padding: 8px 4px; border-radius: 8px; }
+        .ratio-item.active { border: 1px solid var(--accent); background: rgba(59,130,246,0.1); }
+        .ratio-label { font-size: 10px; color: #aaa; }
+        .ratio-title { font-size: 11px; color: #555; }
+        .ratio-visual-box { width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; }
+        .ratio-shape { border: 1.5px solid #555; border-radius: 2px; }
+        .ratio-shape-1-1 { width: 20px; height: 20px; }
+        .ratio-shape-16-9 { width: 20px; height: 11.25px; }
+        .ratio-shape-9-16 { width: 11.25px; height: 20px; }
+        .ratio-shape-4-3 { width: 20px; height: 15px; }
+        .ratio-shape-3-4 { width: 15px; height: 20px; }
+        .ratio-shape-2-3 { width: 13.33px; height: 20px; }
+        .ratio-shape-3-2 { width: 20px; height: 13.33px; }
+        .ratio-shape-7-4 { width: 20px; height: 11.43px; }
+        .ratio-shape-4-7 { width: 11.43px; height: 20px; }
+        .ratio-shape-21-9 { width: 20px; height: 8.57px; }
+
+        .media-container { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
+        .media-placeholder { opacity: 0.05; font-size: 40px; }
+        .text-node-input { height: 160px; width: 90%; }
+
+        .add-btn { position: fixed; left: 24px; top: 50%; transform: translateY(-50%); width: 44px; height: 44px; background: #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; color: #000; font-size: 24px; z-index: 1000; transition: transform 0.16s ease, box-shadow 0.16s ease; }
+        .add-btn:hover { transform: translateY(-50%) scale(1.04); box-shadow: 0 8px 28px rgba(255,255,255,0.16); }
+        .line { stroke: rgba(255,255,255,0.15); stroke-width: 1.5; fill: none; pointer-events: stroke; cursor: pointer; transition: stroke 0.2s; stroke-linecap: round; stroke-linejoin: round; }
+        .line:hover { stroke: rgba(255,255,255,0.5); }
+        .line.selected { stroke: var(--accent); stroke-width: 2.5; }
+        #temp-line { stroke: var(--accent); stroke-width: 1.5; fill: none; stroke-dasharray: 4; }
+        #file-input { display: none; }
