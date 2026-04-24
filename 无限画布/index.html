@@ -12,6 +12,20 @@
         <svg id="svg-layer"><g id="links-container"></g><path id="temp-line" d=""></path></svg>
     </div>
 </div>
+<section id="canvas-empty-state" class="canvas-empty-state">
+    <div class="empty-headline">
+        <span class="empty-badge">✦ 双击</span>
+        <span class="empty-text">画布自由生成, 或者看模板</span>
+    </div>
+    <div class="empty-chip-row">
+        <button class="empty-chip" type="button">▣ 文字生视频</button>
+        <button class="empty-chip" type="button">▨ 图片换背景</button>
+        <button class="empty-chip" type="button">✧ 音频生成视频</button>
+        <button class="empty-chip" type="button">♫ 音频生视频</button>
+        <button class="empty-chip" type="button">◎ 文字生 3D 世界</button>
+        <button class="empty-chip" type="button">▤ 模板</button>
+    </div>
+</section>
 
 <header class="app-topbar">
     <div class="brand-pill">
@@ -27,8 +41,11 @@
 
 <aside class="agent-panel">
     <div class="agent-header">
-        <span class="agent-title">Agent 助手</span>
-        <button id="agent-collapse-btn" class="agent-icon-btn" title="收起">×</button>
+        <div class="agent-header-actions">
+            <button class="agent-icon-btn" title="新建">＋</button>
+            <button class="agent-icon-btn" title="对话">◦</button>
+            <button id="agent-collapse-btn" class="agent-icon-btn" title="关闭">×</button>
+        </div>
     </div>
     <div class="agent-body">
         <p class="agent-greet">Hi 设计师，今天想一起创作什么？</p>
@@ -44,6 +61,7 @@
         </div>
     </div>
 </aside>
+<button id="agent-fab" class="agent-fab" title="打开 Agent">✺</button>
 
 <div class="canvas-controls" id="canvas-controls">
     <button class="canvas-ctl-btn" id="zoom-out-btn" title="缩小">－</button>

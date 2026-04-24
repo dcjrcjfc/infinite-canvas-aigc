@@ -2,6 +2,22 @@
  * [API 密钥填写]
  */
 const T8STAR_API_KEY = "sk-tmGRpPqiFTHisGU1epRoHtkKv1W5xxtgmt4pIhqj2r1BNDTS"; // 请确保填入 sk- 开头的正确密钥
+const GPT_IMAGE_2_API_KEY = "sk-OFBMv6xy7KXfTLCxA0vY9uQRmhjv4syRarkSdGseIzvE4790";
+
+const MODEL_OPTIONS = [
+    { id: "gemini-3.1-flash-image-preview-4k", label: "NanoBanana", icon: "🍌" },
+    { id: "gpt-image-2", label: "gpt-image-2", icon: "🌀" }
+];
+const SUPPORTS_CSS_ZOOM = typeof CSS !== "undefined" && typeof CSS.supports === "function" && CSS.supports("zoom", "1");
+
+function getModelMeta(modelId) {
+    return MODEL_OPTIONS.find((model) => model.id === modelId) || MODEL_OPTIONS[0];
+}
+
+function getApiKeyByModel(modelId) {
+    if (modelId === "gpt-image-2") return GPT_IMAGE_2_API_KEY;
+    return T8STAR_API_KEY;
+}
 
 const State = {
     canvas: { x: -4500, y: -4500, scale: 1 },
@@ -16,7 +32,13 @@ const Engine = {
         const dpr = window.devicePixelRatio || 1;
         return Math.round(v * dpr) / dpr;
     },
-    screenToCanvas(cx, cy) { return { x: (cx - State.canvas.x) / State.canvas.scale, y: (cy - State.canvas.y) / State.canvas.scale }; },
+    screenToCanvas(cx, cy) {
+        if (SUPPORTS_CSS_ZOOM) {
+            // CSS zoom mode maps as: screen = (world + translate) * scale
+            return { x: cx / State.canvas.scale - State.canvas.x, y: cy / State.canvas.scale - State.canvas.y };
+        }
+        return { x: (cx - State.canvas.x) / State.canvas.scale, y: (cy - State.canvas.y) / State.canvas.scale };
+    },
     getCurvePath(x1, y1, x2, y2) { const d = Math.abs(x2 - x1) * 0.4; return `M ${x1} ${y1} C ${x1 + d} ${y1}, ${x2 - d} ${y2}, ${x2} ${y2}`; },
     getConnPos(el) {
         const r = el.getBoundingClientRect(), cr = document.getElementById('canvas').getBoundingClientRect();
@@ -29,7 +51,15 @@ const UI = {
         const tx = Engine.snapToDevicePixel(State.canvas.x);
         const ty = Engine.snapToDevicePixel(State.canvas.y);
         const s = Engine.roundScale(State.canvas.scale);
-        document.getElementById('canvas').style.transform = `translate(${tx}px, ${ty}px) scale(${s})`;
+        const canvas = document.getElementById('canvas');
+        if (SUPPORTS_CSS_ZOOM) {
+            // Native zoom usually keeps text/vector edges crisper than transform scale.
+            canvas.style.transform = `translate(${tx}px, ${ty}px)`;
+            canvas.style.zoom = String(s);
+        } else {
+            canvas.style.zoom = "";
+            canvas.style.transform = `translate(${tx}px, ${ty}px) scale(${s})`;
+        }
     },
     updateZoomUI() {
         const slider = document.getElementById('zoom-slider');
@@ -43,12 +73,18 @@ const UI = {
         const node = document.createElement('div');
         node.className = 'node';
         node.style.left = pos.x + 'px'; node.style.top = pos.y + 'px';
-        node.dataset.model = "NanoBanana"; node.dataset.ratio = "1:1";
+        node.dataset.model = MODEL_OPTIONS[0].id;
+        node.dataset.ratio = "1:1";
+        const modelMeta = getModelMeta(node.dataset.model);
 
         const ratios = ["1:1","16:9","9:16","4:3","3:4","2:3","3:2","7:4","4:7","21:9"];
         const ratioGridHTML = ratios.map(r => {
             const ratioClass = `ratio-shape-${r.replace(':', '-')}`;
             return `<div class="ratio-item ${r==='1:1'?'active':''}" data-ratio="${r}"><div class="ratio-visual-box"><div class="ratio-shape ${ratioClass}"></div></div><div class="ratio-label">${r}</div></div>`;
+        }).join('');
+        const modelListHTML = MODEL_OPTIONS.map((model) => {
+            const activeClass = model.id === node.dataset.model ? "active" : "";
+            return `<button class="model-item ${activeClass}" data-model-id="${model.id}" type="button"><span class="model-item-icon">${model.icon}</span><span class="model-item-label">${model.label}</span></button>`;
         }).join('');
 
         let mediaHTML = `<span class="media-placeholder">${type==='video'?'🎬':'🖼️'}</span>`;
@@ -70,9 +106,10 @@ const UI = {
                 </div>
                 <textarea class="ai-input" placeholder="输入指令..."></textarea>
                 <div class="ai-footer">
-                    <div class="footer-group"><div class="footer-btn model-switch">🍌 NanoBanana</div><div class="footer-btn ratio-toggle">⬜ ${node.dataset.ratio}</div></div>
+                    <div class="footer-group"><div class="footer-btn model-switch">${modelMeta.icon} ${modelMeta.label}</div><div class="footer-btn ratio-toggle">⬜ ${node.dataset.ratio}</div></div>
                     <div class="send-btn">↑</div>
                 </div>
+                <div class="model-popover">${modelListHTML}</div>
                 <div class="ratio-popover"><div class="ratio-title">输出比例</div><div class="ratio-grid">${ratioGridHTML}</div></div>
             </div>
         `;
@@ -156,11 +193,23 @@ const Interaction = {
         const oldScale = State.canvas.scale;
         const newScale = Engine.clamp(oldScale * factor, this.minScale, this.maxScale);
         if (Math.abs(newScale - oldScale) < 0.0001) return;
-        const worldX = (clientX - State.canvas.x) / oldScale;
-        const worldY = (clientY - State.canvas.y) / oldScale;
+        let worldX;
+        let worldY;
+        if (SUPPORTS_CSS_ZOOM) {
+            worldX = clientX / oldScale - State.canvas.x;
+            worldY = clientY / oldScale - State.canvas.y;
+        } else {
+            worldX = (clientX - State.canvas.x) / oldScale;
+            worldY = (clientY - State.canvas.y) / oldScale;
+        }
         State.canvas.scale = newScale;
-        State.canvas.x = clientX - worldX * newScale;
-        State.canvas.y = clientY - worldY * newScale;
+        if (SUPPORTS_CSS_ZOOM) {
+            State.canvas.x = clientX / newScale - worldX;
+            State.canvas.y = clientY / newScale - worldY;
+        } else {
+            State.canvas.x = clientX - worldX * newScale;
+            State.canvas.y = clientY - worldY * newScale;
+        }
         this.requestRender({ canvas: true, lines: true, tempLine: true });
     },
 
@@ -171,11 +220,23 @@ const Interaction = {
         const cy = viewport.clientHeight / 2;
         const oldScale = State.canvas.scale;
         if (Math.abs(nextScale - oldScale) < 0.0001) return;
-        const worldX = (cx - State.canvas.x) / oldScale;
-        const worldY = (cy - State.canvas.y) / oldScale;
+        let worldX;
+        let worldY;
+        if (SUPPORTS_CSS_ZOOM) {
+            worldX = cx / oldScale - State.canvas.x;
+            worldY = cy / oldScale - State.canvas.y;
+        } else {
+            worldX = (cx - State.canvas.x) / oldScale;
+            worldY = (cy - State.canvas.y) / oldScale;
+        }
         State.canvas.scale = nextScale;
-        State.canvas.x = cx - worldX * nextScale;
-        State.canvas.y = cy - worldY * nextScale;
+        if (SUPPORTS_CSS_ZOOM) {
+            State.canvas.x = cx / nextScale - worldX;
+            State.canvas.y = cy / nextScale - worldY;
+        } else {
+            State.canvas.x = cx - worldX * nextScale;
+            State.canvas.y = cy - worldY * nextScale;
+        }
         this.requestRender({ canvas: true, lines: true, tempLine: true });
     },
 
@@ -196,14 +257,26 @@ const Interaction = {
         this.requestRender({ canvas: true, lines: true, tempLine: true });
     },
 
-    toggleAgentPanel() {
+    setAgentPanelOpen(isOpen) {
         const panel = document.querySelector('.agent-panel');
-        const btn = document.getElementById('agent-collapse-btn');
+        const fab = document.getElementById('agent-fab');
         const railBtn = document.getElementById('rail-agent-btn');
         if (!panel) return;
-        panel.classList.toggle('collapsed');
-        if (btn) btn.textContent = panel.classList.contains('collapsed') ? '≡' : '×';
-        if (railBtn) railBtn.classList.toggle('active', !panel.classList.contains('collapsed'));
+        panel.classList.toggle('hidden', !isOpen);
+        if (fab) fab.classList.toggle('visible', !isOpen);
+        if (railBtn) railBtn.classList.toggle('active', isOpen);
+    },
+
+    toggleAgentPanel() {
+        const panel = document.querySelector('.agent-panel');
+        if (!panel) return;
+        this.setAgentPanelOpen(panel.classList.contains('hidden'));
+    },
+
+    syncCanvasEmptyState() {
+        const emptyState = document.getElementById('canvas-empty-state');
+        if (!emptyState) return;
+        emptyState.classList.toggle('hidden', State.nodes.length > 0);
     },
 
     init() {
@@ -254,10 +327,21 @@ const Interaction = {
         };
         view.onwheel = (e) => {
             if (e.target.closest('.ai-panel') || e.target.closest('.agent-panel') || e.target.closest('.canvas-controls')) return;
-            e.preventDefault();
             this.stopInertia();
-            const factor = Math.pow(1.08, -e.deltaY / 70);
-            this.zoomAt(e.clientX, e.clientY, factor);
+            if (e.ctrlKey) {
+                e.preventDefault();
+                const factor = Math.pow(1.08, -e.deltaY / 70);
+                const cx = view.clientWidth / 2;
+                const cy = view.clientHeight / 2;
+                this.zoomAt(cx, cy, factor);
+                return;
+            }
+
+            e.preventDefault();
+            const panSpeed = 0.9;
+            State.canvas.y -= e.deltaY * panSpeed;
+            State.canvas.x -= e.deltaX * panSpeed;
+            this.requestRender({ canvas: true, lines: true, tempLine: true });
         };
 
         document.body.onclick = (e) => {
@@ -265,6 +349,8 @@ const Interaction = {
             const ratioToggle = e.target.closest('.ratio-toggle');
             const ratioItem = e.target.closest('.ratio-item');
             const sendBtn = e.target.closest('.send-btn');
+            const modelSwitchBtn = e.target.closest('.model-switch');
+            const modelItem = e.target.closest('.model-item');
             const connector = e.target.closest('.connector');
             const nodeUpload = e.target.closest('.node-upload-pill');
             const refAddBtn = e.target.closest('.ref-add-btn');
@@ -279,10 +365,34 @@ const Interaction = {
                     const pos = Engine.screenToCanvas(window.innerWidth/2, window.innerHeight/2);
                     const el = UI.createNode(type, pos);
                     State.nodes.push({ el, x: pos.x, y: pos.y, type });
+                    this.syncCanvasEmptyState();
                 }
                 document.getElementById('nodeMenu').style.display = 'none'; return;
             }
-            if (ratioToggle) { const pop = node.querySelector('.ratio-popover'); pop.style.display = pop.style.display === 'block' ? 'none' : 'block'; return; }
+            if (!modelSwitchBtn && !modelItem && !ratioToggle && !ratioItem) this.closeAllNodePopovers();
+            if (modelSwitchBtn && node) {
+                const pop = node.querySelector('.model-popover');
+                if (pop) {
+                    const visible = pop.style.display === 'block';
+                    this.closeAllNodePopovers();
+                    pop.style.display = visible ? 'none' : 'block';
+                }
+                return;
+            }
+            if (modelItem && node) {
+                const modelId = modelItem.dataset.modelId;
+                this.selectNodeModel(node, modelId);
+                return;
+            }
+            if (ratioToggle) {
+                const pop = node.querySelector('.ratio-popover');
+                if (pop) {
+                    const visible = pop.style.display === 'block';
+                    this.closeAllNodePopovers();
+                    pop.style.display = visible ? 'none' : 'block';
+                }
+                return;
+            }
             if (ratioItem) {
                 node.dataset.ratio = ratioItem.dataset.ratio;
                 node.querySelector('.ratio-toggle').innerText = `⬜ ${node.dataset.ratio}`;
@@ -329,6 +439,7 @@ const Interaction = {
         const zoomResetBtn = document.getElementById('zoom-reset-btn');
         const zoomSlider = document.getElementById('zoom-slider');
         const agentCollapseBtn = document.getElementById('agent-collapse-btn');
+        const agentFabBtn = document.getElementById('agent-fab');
         const railFocusBtn = document.getElementById('rail-focus-btn');
         const railResetBtn = document.getElementById('rail-reset-btn');
         const railAgentBtn = document.getElementById('rail-agent-btn');
@@ -348,11 +459,18 @@ const Interaction = {
         if (agentCollapseBtn) {
             agentCollapseBtn.onclick = (e) => {
                 e.stopPropagation();
-                this.toggleAgentPanel();
+                this.setAgentPanelOpen(false);
+            };
+        }
+        if (agentFabBtn) {
+            agentFabBtn.onclick = (e) => {
+                e.stopPropagation();
+                this.setAgentPanelOpen(true);
             };
         }
         const panel = document.querySelector('.agent-panel');
-        if (panel && railAgentBtn) railAgentBtn.classList.toggle('active', !panel.classList.contains('collapsed'));
+        if (panel) this.setAgentPanelOpen(!panel.classList.contains('hidden'));
+        this.syncCanvasEmptyState();
 
         document.body.onmousedown = (e) => {
             const node = e.target.closest('.node');
@@ -374,6 +492,7 @@ const Interaction = {
                 const el = UI.createNode(nodeType, pos, url);
                 el._rawFile = file;
                 State.nodes.push({ el, x: pos.x, y: pos.y, type: nodeType });
+                this.syncCanvasEmptyState();
             } else if (State.uploadContext.kind === 'node') {
                 const targetNode = State.uploadContext.node;
                 targetNode.querySelector('.media-container').innerHTML = file.type.includes('video') ? `<video src="${url}" autoplay loop muted></video>` : `<img src="${url}">`;
@@ -391,27 +510,12 @@ const Interaction = {
     async runAI(node) {
         const prompt = node.querySelector('.ai-panel .ai-input').value.trim();
         const ratio = node.dataset.ratio;
+        const model = node.dataset.model || MODEL_OPTIONS[0].id;
+        const apiKey = getApiKeyByModel(model);
         const btn = node.querySelector('.send-btn');
         if (!prompt) return alert("请输入指令");
 
         btn.classList.add('loading');
-
-        const nextPos = { x: parseFloat(node.style.left) + 450, y: parseFloat(node.style.top) };
-        const resultNode = UI.createNode('image', nextPos);
-        resultNode.classList.add('new-result');
-        State.nodes.push({ el: resultNode, x: nextPos.x, y: nextPos.y, type: 'image' });
-
-        const line = document.createElementNS("http://www.w3.org/2000/svg", "path");
-        line.setAttribute('class', 'line');
-        const linkId = 'link_' + Date.now();
-        line.dataset.id = linkId;
-        document.getElementById('links-container').appendChild(line);
-        State.links.push({ id: linkId, fromEl: node.querySelector('.conn-right'), toEl: resultNode.querySelector('.conn-left'), pathEl: line });
-        
-        // 生成节点时，也将源节点作为参考图传递
-        this.addReferenceImage(node, resultNode, linkId);
-        
-        this.requestRender({ lines: true });
 
         try {
             let res;
@@ -423,34 +527,82 @@ const Interaction = {
                 const fd = new FormData();
                 refFiles.forEach((file, index) => fd.append('image', file, file.name || `reference_${index}.png`));
                 fd.append('prompt', prompt);
-                fd.append('model', 'gemini-3.1-flash-image-preview-4k');
+                fd.append('model', model);
                 fd.append('image_size', '1K'); 
                 
                 res = await fetch("https://ai.t8star.cn/v1/images/edits", {
                     method: "POST",
-                    headers: { "Authorization": `Bearer ${T8STAR_API_KEY}` },
+                    headers: { "Authorization": `Bearer ${apiKey}` },
                     body: fd
                 });
             } else {
                 res = await fetch("https://ai.t8star.cn/v1/images/generations", {
                     method: "POST",
-                    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${T8STAR_API_KEY}` },
-                    body: JSON.stringify({ model: "gemini-3.1-flash-image-preview-4k", prompt, n: 1, size: size, image_size: "1K" })
+                    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
+                    body: JSON.stringify({ model, prompt, n: 1, size: size, image_size: "1K" })
                 });
             }
             
             const result = await res.json();
             console.log("API Result:", result); 
             if (result.data) {
-                resultNode.querySelector('.media-container').innerHTML = `<img src="${result.data[0].url}">`;
-                // 记录生成的图片，以便后续再连线时可以作为源文件
-                resultNode._rawFile = null; 
-                resultNode.querySelector('img').onload = () => this.requestRender({ lines: true });
+                node.querySelector('.media-container').innerHTML = `<img src="${result.data[0].url}">`;
+                // 远程 URL 无法直接映射本地文件对象，后续需要时会按 URL 转 File
+                node._rawFile = null;
+                const img = node.querySelector('.media-container img');
+                if (img) {
+                    img.onload = () => {
+                        this.refreshDownstreamReferences(node);
+                        this.requestRender({ lines: true });
+                    };
+                } else {
+                    this.refreshDownstreamReferences(node);
+                    this.requestRender({ lines: true });
+                }
             } else {
                 alert("生成异常: " + JSON.stringify(result.error || result));
             }
         } catch (err) { alert("网络错误，请检查 API Key"); }
         finally { btn.classList.remove('loading'); }
+    },
+
+    closeAllNodePopovers() {
+        document.querySelectorAll('.model-popover').forEach((el) => { el.style.display = 'none'; });
+        document.querySelectorAll('.ratio-popover').forEach((el) => { el.style.display = 'none'; });
+    },
+
+    selectNodeModel(node, modelId) {
+        if (!node || !modelId) return;
+        const modelMeta = getModelMeta(modelId);
+        node.dataset.model = modelMeta.id;
+        const modelBtn = node.querySelector('.model-switch');
+        if (modelBtn) modelBtn.textContent = `${modelMeta.icon} ${modelMeta.label}`;
+        node.querySelectorAll('.model-item').forEach((item) => {
+            item.classList.toggle('active', item.dataset.modelId === modelMeta.id);
+        });
+        const pop = node.querySelector('.model-popover');
+        if (pop) pop.style.display = 'none';
+    },
+
+    refreshDownstreamReferences(sourceNode) {
+        if (!sourceNode) return;
+        const sourceMedia = sourceNode.querySelector('.media-container img') || sourceNode.querySelector('.media-container video');
+        if (!sourceMedia) return;
+        State.links.forEach((link) => {
+            if (link.fromEl.closest('.node') !== sourceNode) return;
+            const targetNode = link.toEl.closest('.node');
+            if (!targetNode || !targetNode._refs) return;
+            targetNode._refs = targetNode._refs.map((ref) => {
+                if (ref.linkId !== link.id) return ref;
+                return {
+                    ...ref,
+                    src: sourceMedia.src,
+                    type: sourceMedia.tagName.toLowerCase(),
+                    file: sourceNode._rawFile || null
+                };
+            });
+            this.renderReferences(targetNode);
+        });
     },
 
     // === 修改：连线完成逻辑 ===
@@ -608,6 +760,7 @@ const Interaction = {
             });
         }
         this.deselect();
+        this.syncCanvasEmptyState();
     }
 };
 
