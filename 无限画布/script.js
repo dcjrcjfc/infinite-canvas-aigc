@@ -1,7 +1,7 @@
 /**
  * [API 密钥填写]
  */
-const T8STAR_API_KEY = "sk-OFBMv6xy7KXfTLCxA0vY9uQRmhjv4syRarkSdGseIzvE4790"; // 请确保填入 sk- 开头的正确密钥
+const T8STAR_API_KEY = "sk-tmGRpPqiFTHisGU1epRoHtkKv1W5xxtgmt4pIhqj2r1BNDTS"; // 请确保填入 sk- 开头的正确密钥
 
 const State = {
     canvas: { x: -4500, y: -4500, scale: 1 },
@@ -11,6 +11,11 @@ const State = {
 
 const Engine = {
     clamp(v, min, max) { return Math.max(min, Math.min(max, v)); },
+    roundScale(v) { return Math.round(v * 1000) / 1000; },
+    snapToDevicePixel(v) {
+        const dpr = window.devicePixelRatio || 1;
+        return Math.round(v * dpr) / dpr;
+    },
     screenToCanvas(cx, cy) { return { x: (cx - State.canvas.x) / State.canvas.scale, y: (cy - State.canvas.y) / State.canvas.scale }; },
     getCurvePath(x1, y1, x2, y2) { const d = Math.abs(x2 - x1) * 0.4; return `M ${x1} ${y1} C ${x1 + d} ${y1}, ${x2 - d} ${y2}, ${x2} ${y2}`; },
     getConnPos(el) {
@@ -20,7 +25,20 @@ const Engine = {
 };
 
 const UI = {
-    updateCanvas() { document.getElementById('canvas').style.transform = `translate(${State.canvas.x}px, ${State.canvas.y}px) scale(${State.canvas.scale})`; },
+    updateCanvas() {
+        const tx = Engine.snapToDevicePixel(State.canvas.x);
+        const ty = Engine.snapToDevicePixel(State.canvas.y);
+        const s = Engine.roundScale(State.canvas.scale);
+        document.getElementById('canvas').style.transform = `translate(${tx}px, ${ty}px) scale(${s})`;
+    },
+    updateZoomUI() {
+        const slider = document.getElementById('zoom-slider');
+        const label = document.getElementById('zoom-label');
+        if (!slider || !label) return;
+        const value = Math.round(State.canvas.scale * 100);
+        slider.value = String(value);
+        label.textContent = `${value}%`;
+    },
     createNode(type, pos, url = null) {
         const node = document.createElement('div');
         node.className = 'node';
@@ -89,6 +107,7 @@ const Interaction = {
         if (this.renderRAF) return;
         this.renderRAF = requestAnimationFrame(() => {
             if (this.dirtyCanvas) UI.updateCanvas();
+            if (this.dirtyCanvas) UI.updateZoomUI();
             if (this.dirtyLines) UI.updateLines();
             if (this.dirtyTempLine) {
                 if (State.linking.active && State.linking.startEl) {
@@ -145,6 +164,48 @@ const Interaction = {
         this.requestRender({ canvas: true, lines: true, tempLine: true });
     },
 
+    setScaleByPercent(percent) {
+        const nextScale = Engine.clamp(percent / 100, this.minScale, this.maxScale);
+        const viewport = document.getElementById('viewport');
+        const cx = viewport.clientWidth / 2;
+        const cy = viewport.clientHeight / 2;
+        const oldScale = State.canvas.scale;
+        if (Math.abs(nextScale - oldScale) < 0.0001) return;
+        const worldX = (cx - State.canvas.x) / oldScale;
+        const worldY = (cy - State.canvas.y) / oldScale;
+        State.canvas.scale = nextScale;
+        State.canvas.x = cx - worldX * nextScale;
+        State.canvas.y = cy - worldY * nextScale;
+        this.requestRender({ canvas: true, lines: true, tempLine: true });
+    },
+
+    resetView() {
+        State.canvas.x = -4500;
+        State.canvas.y = -4500;
+        State.canvas.scale = 1;
+        this.requestRender({ canvas: true, lines: true, tempLine: true });
+    },
+
+    focusCanvasCenter() {
+        const viewport = document.getElementById('viewport');
+        const cx = viewport.clientWidth / 2;
+        const cy = viewport.clientHeight / 2;
+        const worldCenter = { x: 5000, y: 5000 };
+        State.canvas.x = cx - worldCenter.x * State.canvas.scale;
+        State.canvas.y = cy - worldCenter.y * State.canvas.scale;
+        this.requestRender({ canvas: true, lines: true, tempLine: true });
+    },
+
+    toggleAgentPanel() {
+        const panel = document.querySelector('.agent-panel');
+        const btn = document.getElementById('agent-collapse-btn');
+        const railBtn = document.getElementById('rail-agent-btn');
+        if (!panel) return;
+        panel.classList.toggle('collapsed');
+        if (btn) btn.textContent = panel.classList.contains('collapsed') ? '≡' : '×';
+        if (railBtn) railBtn.classList.toggle('active', !panel.classList.contains('collapsed'));
+    },
+
     init() {
         const view = document.getElementById('viewport');
         view.onmousedown = (e) => {
@@ -157,7 +218,11 @@ const Interaction = {
                 this.panVelocity.y = 0;
                 view.style.cursor = 'grabbing';
             }
-            if (e.target === view || e.target.id === 'canvas') { this.deselect(); document.getElementById('nodeMenu').style.display='none'; }
+            if (e.target === view || e.target.id === 'canvas') {
+                this.deselect();
+                document.getElementById('nodeMenu').style.display='none';
+                document.getElementById('ui-add-btn')?.classList.remove('active');
+            }
         };
         window.onmousemove = (e) => {
             this.mouseScreen.x = e.clientX;
@@ -188,7 +253,7 @@ const Interaction = {
             this.dragNode = null;
         };
         view.onwheel = (e) => {
-            if (e.target.closest('.ai-panel')) return;
+            if (e.target.closest('.ai-panel') || e.target.closest('.agent-panel') || e.target.closest('.canvas-controls')) return;
             e.preventDefault();
             this.stopInertia();
             const factor = Math.pow(1.08, -e.deltaY / 70);
@@ -252,7 +317,42 @@ const Interaction = {
             }
         };
 
-        document.getElementById('ui-add-btn').onclick = (e) => { e.stopPropagation(); document.getElementById('nodeMenu').style.display='block'; };
+        document.getElementById('ui-add-btn').onclick = (e) => {
+            e.stopPropagation();
+            const menu = document.getElementById('nodeMenu');
+            const visible = menu.style.display === 'block';
+            menu.style.display = visible ? 'none' : 'block';
+            document.getElementById('ui-add-btn')?.classList.toggle('active', !visible);
+        };
+        const zoomOutBtn = document.getElementById('zoom-out-btn');
+        const zoomInBtn = document.getElementById('zoom-in-btn');
+        const zoomResetBtn = document.getElementById('zoom-reset-btn');
+        const zoomSlider = document.getElementById('zoom-slider');
+        const agentCollapseBtn = document.getElementById('agent-collapse-btn');
+        const railFocusBtn = document.getElementById('rail-focus-btn');
+        const railResetBtn = document.getElementById('rail-reset-btn');
+        const railAgentBtn = document.getElementById('rail-agent-btn');
+
+        if (zoomOutBtn) zoomOutBtn.onclick = () => this.setScaleByPercent(State.canvas.scale * 100 - 10);
+        if (zoomInBtn) zoomInBtn.onclick = () => this.setScaleByPercent(State.canvas.scale * 100 + 10);
+        if (zoomResetBtn) zoomResetBtn.onclick = () => this.resetView();
+        if (railFocusBtn) railFocusBtn.onclick = () => this.focusCanvasCenter();
+        if (railResetBtn) railResetBtn.onclick = () => this.resetView();
+        if (railAgentBtn) railAgentBtn.onclick = () => this.toggleAgentPanel();
+        if (zoomSlider) {
+            zoomSlider.oninput = (e) => {
+                const next = Number(e.target.value);
+                this.setScaleByPercent(next);
+            };
+        }
+        if (agentCollapseBtn) {
+            agentCollapseBtn.onclick = (e) => {
+                e.stopPropagation();
+                this.toggleAgentPanel();
+            };
+        }
+        const panel = document.querySelector('.agent-panel');
+        if (panel && railAgentBtn) railAgentBtn.classList.toggle('active', !panel.classList.contains('collapsed'));
 
         document.body.onmousedown = (e) => {
             const node = e.target.closest('.node');
@@ -323,7 +423,7 @@ const Interaction = {
                 const fd = new FormData();
                 refFiles.forEach((file, index) => fd.append('image', file, file.name || `reference_${index}.png`));
                 fd.append('prompt', prompt);
-                fd.append('model', 'nano-banana-2-4k');
+                fd.append('model', 'gemini-3.1-flash-image-preview-4k');
                 fd.append('image_size', '1K'); 
                 
                 res = await fetch("https://ai.t8star.cn/v1/images/edits", {
@@ -335,7 +435,7 @@ const Interaction = {
                 res = await fetch("https://ai.t8star.cn/v1/images/generations", {
                     method: "POST",
                     headers: { "Content-Type": "application/json", "Authorization": `Bearer ${T8STAR_API_KEY}` },
-                    body: JSON.stringify({ model: "nano-banana-2-4k", prompt, n: 1, size: size, image_size: "1K" })
+                    body: JSON.stringify({ model: "gemini-3.1-flash-image-preview-4k", prompt, n: 1, size: size, image_size: "1K" })
                 });
             }
             
@@ -513,4 +613,5 @@ const Interaction = {
 
 Interaction.init();
 UI.updateCanvas();
+UI.updateZoomUI();
 document.oncontextmenu = e => e.preventDefault();

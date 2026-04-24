@@ -13,7 +13,61 @@
     </div>
 </div>
 
-<div class="add-btn" id="ui-add-btn">＋</div>
+<header class="app-topbar">
+    <div class="brand-pill">
+        <span class="brand-dot"></span>
+        <span class="brand-name">Design Sketch (0408)</span>
+    </div>
+    <div class="top-actions">
+        <button class="top-chip">AI 角色库已上线</button>
+        <button class="top-chip top-chip-light">立即探索</button>
+        <button class="top-chip">社区</button>
+    </div>
+</header>
+
+<aside class="agent-panel">
+    <div class="agent-header">
+        <span class="agent-title">Agent 助手</span>
+        <button id="agent-collapse-btn" class="agent-icon-btn" title="收起">×</button>
+    </div>
+    <div class="agent-body">
+        <p class="agent-greet">Hi 设计师，今天想一起创作什么？</p>
+        <div class="agent-actions">
+            <button class="agent-chip">找灵感</button>
+            <button class="agent-chip">写角色设定</button>
+            <button class="agent-chip">找参考图</button>
+        </div>
+        <textarea class="agent-input" placeholder="描述想法，或指定节点添加上下文..."></textarea>
+        <div class="agent-footer">
+            <span class="agent-mode">Pro</span>
+            <button id="agent-send-btn" class="agent-send-btn">↑</button>
+        </div>
+    </div>
+</aside>
+
+<div class="canvas-controls" id="canvas-controls">
+    <button class="canvas-ctl-btn" id="zoom-out-btn" title="缩小">－</button>
+    <input id="zoom-slider" class="zoom-slider" type="range" min="25" max="260" value="100" />
+    <button class="canvas-ctl-btn" id="zoom-in-btn" title="放大">＋</button>
+    <button class="canvas-ctl-btn" id="zoom-reset-btn" title="重置视图">⌂</button>
+    <span id="zoom-label" class="zoom-label">100%</span>
+</div>
+
+<aside class="left-rail">
+    <button class="rail-main-btn" id="ui-add-btn" title="添加节点" data-tip="添加节点">
+        <span class="rail-icon">＋</span>
+    </button>
+    <div class="rail-divider"></div>
+    <button class="rail-btn" id="rail-focus-btn" title="回到画布中心" data-tip="回到中心">
+        <span class="rail-icon">◎</span>
+    </button>
+    <button class="rail-btn" id="rail-reset-btn" title="重置视图" data-tip="重置视图">
+        <span class="rail-icon">⌂</span>
+    </button>
+    <button class="rail-btn" id="rail-agent-btn" title="收起/展开 Agent" data-tip="切换 Agent">
+        <span class="rail-icon">◨</span>
+    </button>
+</aside>
 
 <div id="nodeMenu" class="node-menu">
     <div class="menu-section-title">添加节点</div>
