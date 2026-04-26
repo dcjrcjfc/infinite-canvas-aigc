@@ -17,14 +17,6 @@
         <span class="empty-badge">✦ 双击</span>
         <span class="empty-text">画布自由生成, 或者看模板</span>
     </div>
-    <div class="empty-chip-row">
-        <button class="empty-chip" type="button">▣ 文字生视频</button>
-        <button class="empty-chip" type="button">▨ 图片换背景</button>
-        <button class="empty-chip" type="button">✧ 音频生成视频</button>
-        <button class="empty-chip" type="button">♫ 音频生视频</button>
-        <button class="empty-chip" type="button">◎ 文字生 3D 世界</button>
-        <button class="empty-chip" type="button">▤ 模板</button>
-    </div>
 </section>
 
 <header class="app-topbar">
@@ -76,16 +68,56 @@
         <span class="rail-icon">＋</span>
     </button>
     <div class="rail-divider"></div>
-    <button class="rail-btn" id="rail-focus-btn" title="回到画布中心" data-tip="回到中心">
-        <span class="rail-icon">◎</span>
+    <button class="rail-btn" id="rail-history-btn" title="历史" data-tip="历史">
+        <span class="rail-icon">⟲</span>
     </button>
-    <button class="rail-btn" id="rail-reset-btn" title="重置视图" data-tip="重置视图">
-        <span class="rail-icon">⌂</span>
+    <button class="rail-btn" id="rail-editor-btn" title="图片编辑器" data-tip="图片编辑器">
+        <span class="rail-icon">✂</span>
     </button>
-    <button class="rail-btn" id="rail-agent-btn" title="收起/展开 Agent" data-tip="切换 Agent">
-        <span class="rail-icon">◨</span>
+    <button class="rail-btn" id="rail-profile-btn" title="个人信息" data-tip="个人信息">
+        <span class="rail-icon">◉</span>
     </button>
 </aside>
+
+<div id="rail-history-panel" class="rail-popup-panel">
+    <div class="rail-popup-title">历史</div>
+    <div class="rail-popup-actions">
+        <button id="history-clear-btn" class="rail-mini-btn" type="button">清空</button>
+    </div>
+    <div id="history-list" class="history-list"></div>
+</div>
+
+<div id="rail-editor-panel" class="rail-popup-panel">
+    <div class="rail-popup-title">图片编辑器</div>
+    <div class="editor-grid">
+        <label class="editor-row">亮度 <input id="edit-brightness" type="range" min="40" max="180" value="100"></label>
+        <label class="editor-row">对比度 <input id="edit-contrast" type="range" min="40" max="180" value="100"></label>
+        <label class="editor-row">饱和度 <input id="edit-saturate" type="range" min="0" max="200" value="100"></label>
+    </div>
+    <div class="rail-popup-actions">
+        <button id="editor-rotate-btn" class="rail-mini-btn" type="button">旋转90°</button>
+        <button id="editor-mirror-btn" class="rail-mini-btn" type="button">镜像</button>
+        <button id="editor-reset-btn" class="rail-mini-btn" type="button">重置</button>
+        <button id="editor-apply-btn" class="rail-mini-btn" type="button">应用</button>
+    </div>
+    <div class="rail-popup-note">先选中一个图片节点再应用参数</div>
+</div>
+
+<div id="rail-profile-menu" class="profile-menu">
+    <div class="profile-head">
+        <div class="profile-avatar">X</div>
+        <div class="profile-meta">
+            <div class="profile-name">xxiong</div>
+            <div class="profile-email">13719103923tx@gmail.com</div>
+        </div>
+    </div>
+    <button id="profile-notify-btn" class="profile-item" type="button">🔔 我的通知</button>
+    <button id="profile-home-btn" class="profile-item" type="button">👤 个人主页</button>
+    <button id="profile-account-btn" class="profile-item" type="button">⚙ 账户管理</button>
+    <div class="profile-divider"></div>
+    <button id="profile-tutorial-btn" class="profile-item" type="button">❔ 使用教程</button>
+    <button id="profile-logout-btn" class="profile-item" type="button">↪ 登出账号</button>
+</div>
 
 <div id="nodeMenu" class="node-menu">
     <div class="menu-section-title">添加节点</div>
@@ -97,6 +129,7 @@
 </div>
 
 <input type="file" id="file-input">
+<div id="toast" class="toast"></div>
 
 <script src="./script.js"></script>
 </body>
