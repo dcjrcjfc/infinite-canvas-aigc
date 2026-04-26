@@ -193,7 +193,8 @@ const State = {
     multiSelection: [],
     clipboard: null,
     pasteSerial: 0,
-    nodeCounters: { text: 0, image: 0, video: 0 }
+    nodeCounters: { text: 0, image: 0, video: 0 },
+    templateCreateLockUntil: 0
 };
 
 const Engine = {
@@ -495,6 +496,13 @@ const Interaction = {
         const preset = TEMPLATE_PRESETS[templateId];
         if (!preset) {
             this.toast('模板不存在或暂不可用', 'warn');
+            return;
+        }
+        const now = Date.now();
+        if (now < State.templateCreateLockUntil) return;
+        State.templateCreateLockUntil = now + 500;
+        if (State.nodes.length > 0) {
+            this.toast('当前画布已有内容，已阻止重复批量创建模板', 'warn', 2200);
             return;
         }
         const viewport = document.getElementById('viewport');
