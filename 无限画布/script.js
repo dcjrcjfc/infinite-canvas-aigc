@@ -7,6 +7,9 @@ const SUPPORTS_CSS_ZOOM = typeof CSS !== "undefined" && typeof CSS.supports === 
 const HISTORY_STORAGE_KEY = "infinite_canvas_history_v1";
 const MAX_HISTORY_ITEMS = 60;
 const MAX_COMMAND_STACK = 40;
+const API_MAX_RETRIES = 2;
+const API_RETRY_DELAY_MS = 700;
+const API_RETRYABLE_STATUS = new Set([408, 409, 425, 429, 500, 502, 503, 504]);
 const HISTORY_TYPE_LABELS = {
     node: "节点",
     link: "连线",
@@ -20,6 +23,113 @@ const NODE_TYPE_META = {
     text: { label: "文本节点", icon: "📝" },
     image: { label: "图片节点", icon: "🖼️" },
     video: { label: "视频节点", icon: "🎬" }
+};
+const TEMPLATE_PRESETS = {
+    character: {
+        label: "角色设定流",
+        nodes: [
+            {
+                key: "brief",
+                type: "text",
+                dx: -620,
+                dy: -110,
+                name: "角色设定",
+                status: "输入节点",
+                text: "角色关键词：年龄、身份、服装、性格、时代背景、镜头语言。"
+            },
+            {
+                key: "style",
+                type: "image",
+                dx: -20,
+                dy: -150,
+                name: "风格探索",
+                status: "生成节点",
+                ratio: "3:4",
+                prompt: "角色设定图，统一服装材质和配色，三视图参考，细节清晰。"
+            },
+            {
+                key: "hero",
+                type: "image",
+                dx: 560,
+                dy: -150,
+                name: "主视觉输出",
+                status: "生成节点",
+                ratio: "3:4",
+                prompt: "基于同一角色形象生成主视觉海报，电影质感，突出角色识别度。"
+            }
+        ],
+        links: [["brief", "style"], ["style", "hero"]]
+    },
+    storyboard: {
+        label: "分镜草案流",
+        nodes: [
+            {
+                key: "script",
+                type: "text",
+                dx: -620,
+                dy: 90,
+                name: "剧情大纲",
+                status: "输入节点",
+                text: "三段式分镜：开场建立环境，中段冲突推进，结尾情绪收束。"
+            },
+            {
+                key: "shotA",
+                type: "image",
+                dx: -20,
+                dy: 60,
+                name: "镜头 A",
+                status: "生成节点",
+                ratio: "16:9",
+                prompt: "分镜镜头 A：建立场景关系，广角构图，明确主体和视线方向。"
+            },
+            {
+                key: "shotB",
+                type: "image",
+                dx: 560,
+                dy: 60,
+                name: "镜头 B",
+                status: "生成节点",
+                ratio: "16:9",
+                prompt: "分镜镜头 B：延续镜头 A 的光线与风格，表现冲突高潮。"
+            }
+        ],
+        links: [["script", "shotA"], ["shotA", "shotB"]]
+    },
+    poster: {
+        label: "海报概念流",
+        nodes: [
+            {
+                key: "concept",
+                type: "text",
+                dx: -620,
+                dy: 280,
+                name: "概念文案",
+                status: "输入节点",
+                text: "主题、标语、受众、主色调、风格关键词、品牌语气。"
+            },
+            {
+                key: "layout",
+                type: "image",
+                dx: -20,
+                dy: 250,
+                name: "构图草图",
+                status: "生成节点",
+                ratio: "2:3",
+                prompt: "海报构图草图，明确主次信息层级、版式网格和视觉重心。"
+            },
+            {
+                key: "final",
+                type: "image",
+                dx: 560,
+                dy: 250,
+                name: "终稿海报",
+                status: "生成节点",
+                ratio: "2:3",
+                prompt: "基于构图草图输出终稿海报，强化标题可读性与品牌统一性。"
+            }
+        ],
+        links: [["concept", "layout"], ["layout", "final"]]
+    }
 };
 
 function getModelMeta(modelId) {
@@ -339,6 +449,76 @@ const Interaction = {
         emptyState.classList.toggle('hidden', State.nodes.length > 0 || menuVisible);
     },
 
+    createTemplateFlow(templateId) {
+        const preset = TEMPLATE_PRESETS[templateId];
+        if (!preset) {
+            this.toast('模板不存在或暂不可用', 'warn');
+            return;
+        }
+        const viewport = document.getElementById('viewport');
+        if (!viewport) return;
+
+        let focusNodeEl = null;
+        let createdNodeId = null;
+        const created = this.runSceneCommand(
+            { historyType: 'node', historyText: `模板创建：${preset.label}` },
+            () => {
+                const center = Engine.screenToCanvas(viewport.clientWidth * 0.45, viewport.clientHeight * 0.48);
+                const nodeMap = {};
+                preset.nodes.forEach((config) => {
+                    const pos = {
+                        x: center.x + Number(config.dx || 0),
+                        y: center.y + Number(config.dy || 0)
+                    };
+                    const el = UI.createNode(config.type, pos, null, { nodeName: config.name || undefined });
+                    State.nodes.push({ el, x: pos.x, y: pos.y, type: config.type });
+                    nodeMap[config.key] = el;
+                    if (!focusNodeEl) focusNodeEl = el;
+                    if (!createdNodeId) createdNodeId = el.dataset.nodeId;
+
+                    if (config.status) this.updateNodeStatus(el, config.status);
+                    if (config.ratio && el.querySelector('.ratio-toggle')) {
+                        el.dataset.ratio = config.ratio;
+                        el.querySelector('.ratio-toggle').innerText = `⬜ ${config.ratio}`;
+                        el.querySelectorAll('.ratio-item').forEach((item) => {
+                            item.classList.toggle('active', item.dataset.ratio === config.ratio);
+                        });
+                    }
+
+                    const textInput = el.querySelector('.text-node-input');
+                    if (textInput && config.text) textInput.value = config.text;
+                    const promptInput = el.querySelector('.ai-panel .ai-input');
+                    if (promptInput && config.prompt) promptInput.value = config.prompt;
+                });
+
+                preset.links.forEach(([fromKey, toKey]) => {
+                    const fromNode = nodeMap[fromKey];
+                    const toNode = nodeMap[toKey];
+                    if (!fromNode || !toNode) return;
+                    const fromConnector = fromNode.querySelector('.conn-right');
+                    const toConnector = toNode.querySelector('.conn-left');
+                    this.createLinkBetween(fromConnector, toConnector);
+                });
+                this.syncCanvasEmptyState();
+            }
+        );
+        if (!created) return;
+
+        if (createdNodeId) {
+            const latestHistory = State.history[0];
+            if (latestHistory && latestHistory.type === 'node' && !latestHistory.nodeId) latestHistory.nodeId = createdNodeId;
+            this.saveHistory();
+            this.renderHistory();
+        }
+
+        this.closeNodeMenu();
+        this.closeRailPopups();
+        if (focusNodeEl) this.focusNode(focusNodeEl);
+        this.setAgentStatus(`模板已创建：${preset.label}`, 'success');
+        this.scheduleAgentReady(1800);
+        this.toast(`已创建模板：${preset.label}`, 'success');
+    },
+
     openNodeMenuAt(clientX, clientY, connectorEl = null) {
         const menu = document.getElementById('nodeMenu');
         if (!menu) return;
@@ -371,13 +551,101 @@ const Interaction = {
         document.getElementById('rail-profile-btn')?.classList.remove('active');
     },
 
-    toast(message) {
+    sleep(ms) {
+        return new Promise((resolve) => setTimeout(resolve, ms));
+    },
+
+    toast(message, type = 'info', duration = 1600) {
         const toast = document.getElementById('toast');
         if (!toast) return;
+        const tone = ['info', 'success', 'warn', 'error'].includes(type) ? type : 'info';
         toast.textContent = message;
+        toast.className = `toast toast-${tone}`;
         toast.classList.add('show');
         clearTimeout(this._toastTimer);
-        this._toastTimer = setTimeout(() => toast.classList.remove('show'), 1600);
+        this._toastTimer = setTimeout(() => toast.classList.remove('show'), duration);
+    },
+
+    setAgentStatus(message, state = 'info') {
+        const statusEl = document.getElementById('agent-status');
+        if (!statusEl) return;
+        const tone = ['info', 'busy', 'success', 'warn', 'error'].includes(state) ? state : 'info';
+        statusEl.textContent = message || '已就绪';
+        statusEl.classList.remove('is-info', 'is-busy', 'is-success', 'is-warn', 'is-error');
+        statusEl.classList.add(`is-${tone}`);
+    },
+
+    setAgentBusy(isBusy) {
+        const sendBtn = document.getElementById('agent-send-btn');
+        if (sendBtn) {
+            sendBtn.disabled = isBusy;
+            sendBtn.classList.toggle('loading', isBusy);
+        }
+        document.querySelectorAll('.agent-chip').forEach((chip) => {
+            chip.disabled = isBusy;
+        });
+    },
+
+    scheduleAgentReady(delay = 1400) {
+        clearTimeout(this._agentStatusTimer);
+        this._agentStatusTimer = setTimeout(() => this.setAgentStatus('已就绪', 'info'), delay);
+    },
+
+    classifyApiError(status, payload, fallback = '') {
+        const raw = typeof payload === 'string'
+            ? payload
+            : (payload?.error?.message || payload?.error || payload?.message || fallback || '');
+        const suffix = raw ? `（${String(raw).slice(0, 80)}）` : '';
+        if (status === 401 || status === 403) {
+            return {
+                code: 'auth',
+                message: `鉴权失败，请检查代理环境变量或模型权限${suffix}`
+            };
+        }
+        if (status === 429) {
+            return {
+                code: 'rate',
+                message: `请求过于频繁，已触发限流，请稍后重试${suffix}`
+            };
+        }
+        if (status >= 500) {
+            return {
+                code: 'server',
+                message: `服务暂时不可用（${status}），请稍后重试${suffix}`
+            };
+        }
+        if (status >= 400) {
+            return {
+                code: 'request',
+                message: `请求失败（${status}），请检查输入内容或模型配置${suffix}`
+            };
+        }
+        return {
+            code: 'network',
+            message: '网络异常，请确认代理服务已启动（http://127.0.0.1:8787）后重试'
+        };
+    },
+
+    async fetchWithRetry(requestFactory, options = {}) {
+        const maxRetries = Number.isFinite(options.maxRetries) ? options.maxRetries : API_MAX_RETRIES;
+        const retryDelayMs = Number.isFinite(options.retryDelayMs) ? options.retryDelayMs : API_RETRY_DELAY_MS;
+        let retryCount = 0;
+        while (true) {
+            try {
+                const response = await requestFactory();
+                if (response.ok || !API_RETRYABLE_STATUS.has(response.status) || retryCount >= maxRetries) {
+                    return { response, retryCount };
+                }
+                retryCount += 1;
+                if (typeof options.onRetry === 'function') options.onRetry({ retryCount, status: response.status });
+                await this.sleep(retryDelayMs * retryCount);
+            } catch (error) {
+                if (retryCount >= maxRetries) throw error;
+                retryCount += 1;
+                if (typeof options.onRetry === 'function') options.onRetry({ retryCount, error });
+                await this.sleep(retryDelayMs * retryCount);
+            }
+        }
     },
 
     getSelectedNodeElements() {
@@ -1021,7 +1289,9 @@ const Interaction = {
         this.toast(applied ? '图片编辑已应用' : '参数未变化');
     },
 
-    runAgentAction(type) {
+    async runAgentAction(type, triggerEl = null) {
+        const sendBtn = document.getElementById('agent-send-btn');
+        if (sendBtn?.disabled && sendBtn.classList.contains('loading')) return;
         const agentInput = document.querySelector('.agent-input');
         const selectedNode = State.selection.type === 'node' ? State.selection.item : null;
         const selectedPromptInput = selectedNode?.querySelector('.ai-panel .ai-input');
@@ -1031,45 +1301,71 @@ const Interaction = {
             ref: "帮我列出这个主题的参考图检索词（中英文各 10 条）。"
         };
         const text = presets[type] || "";
-        if (agentInput) agentInput.value = text;
-        if (selectedPromptInput) selectedPromptInput.value = text;
-        this.pushHistory('agent', `Agent动作：${type}`);
-        this.toast('已填入 Agent / 节点输入');
+        if (!text) return;
+        this.setAgentBusy(true);
+        this.setAgentStatus('Agent 正在整理建议...', 'busy');
+        if (triggerEl) triggerEl.classList.add('is-running');
+        try {
+            await this.sleep(220);
+            if (agentInput) agentInput.value = text;
+            if (selectedPromptInput) selectedPromptInput.value = text;
+            this.pushHistory('agent', `Agent动作：${type}`);
+            this.setAgentStatus('建议已填入，可直接发送', 'success');
+            this.toast('已填入 Agent / 节点输入', 'success');
+        } finally {
+            this.setAgentBusy(false);
+            if (triggerEl) triggerEl.classList.remove('is-running');
+            this.scheduleAgentReady();
+        }
     },
 
-    submitAgentInput() {
+    async submitAgentInput() {
+        const sendBtn = document.getElementById('agent-send-btn');
+        if (sendBtn?.disabled && sendBtn.classList.contains('loading')) return;
         const input = document.querySelector('.agent-input');
         const text = input?.value.trim();
         if (!text) {
-            this.toast('先输入内容');
+            this.setAgentStatus('请先输入内容', 'warn');
+            this.toast('先输入内容', 'warn');
             return;
         }
-        if (State.selection.type === 'node' && State.selection.item?.querySelector('.ai-panel .ai-input')) {
-            State.selection.item.querySelector('.ai-panel .ai-input').value = text;
-            this.toast('已写入当前节点提示词');
-        } else {
-            let createdNodeId = null;
-            const created = this.runSceneCommand(
-                { historyType: 'node', historyText: 'Agent发送创建文本节点' },
-                () => {
-                    const pos = Engine.screenToCanvas(window.innerWidth * 0.5, window.innerHeight * 0.3);
-                    const nodeEl = UI.createNode('text', pos);
-                    const node = { el: nodeEl, x: pos.x, y: pos.y, type: 'text' };
-                    State.nodes.push(node);
-                    nodeEl.querySelector('.text-node-input').value = text;
-                    createdNodeId = nodeEl.dataset.nodeId;
-                    this.syncCanvasEmptyState();
+        this.setAgentBusy(true);
+        this.setAgentStatus('正在发送到画布...', 'busy');
+        try {
+            if (State.selection.type === 'node' && State.selection.item?.querySelector('.ai-panel .ai-input')) {
+                State.selection.item.querySelector('.ai-panel .ai-input').value = text;
+                this.setAgentStatus('已写入当前节点', 'success');
+                this.toast('已写入当前节点提示词', 'success');
+            } else {
+                let createdNodeId = null;
+                const created = this.runSceneCommand(
+                    { historyType: 'node', historyText: 'Agent发送创建文本节点' },
+                    () => {
+                        const pos = Engine.screenToCanvas(window.innerWidth * 0.5, window.innerHeight * 0.3);
+                        const nodeEl = UI.createNode('text', pos);
+                        const node = { el: nodeEl, x: pos.x, y: pos.y, type: 'text' };
+                        State.nodes.push(node);
+                        nodeEl.querySelector('.text-node-input').value = text;
+                        createdNodeId = nodeEl.dataset.nodeId;
+                        this.syncCanvasEmptyState();
+                    }
+                );
+                if (created) {
+                    this.setAgentStatus('已创建文本节点', 'success');
+                    this.toast('已创建文本节点', 'success');
                 }
-            );
-            if (created) this.toast('已创建文本节点');
-            if (createdNodeId) {
-                const latestHistory = State.history[0];
-                if (latestHistory && latestHistory.type === 'node' && !latestHistory.nodeId) latestHistory.nodeId = createdNodeId;
-                this.saveHistory();
-                this.renderHistory();
+                if (createdNodeId) {
+                    const latestHistory = State.history[0];
+                    if (latestHistory && latestHistory.type === 'node' && !latestHistory.nodeId) latestHistory.nodeId = createdNodeId;
+                    this.saveHistory();
+                    this.renderHistory();
+                }
             }
+            this.pushHistory('agent', `Agent发送：${text.slice(0, 28)}`);
+        } finally {
+            this.setAgentBusy(false);
+            this.scheduleAgentReady();
         }
-        this.pushHistory('agent', `Agent发送：${text.slice(0, 28)}`);
     },
 
     focusNode(nodeEl, options = {}) {
@@ -1584,6 +1880,7 @@ const Interaction = {
         const agentCollapseBtn = document.getElementById('agent-collapse-btn');
         const agentFabBtn = document.getElementById('agent-fab');
         const agentSendBtn = document.getElementById('agent-send-btn');
+        const agentInputEl = document.querySelector('.agent-input');
         const agentHeaderBtns = Array.from(document.querySelectorAll('.agent-header-actions .agent-icon-btn'));
         const historyClearBtn = document.getElementById('history-clear-btn');
         const historyUndoBtn = document.getElementById('history-undo-btn');
@@ -1600,6 +1897,7 @@ const Interaction = {
         const profileTutorialBtn = document.getElementById('profile-tutorial-btn');
         const profileLogoutBtn = document.getElementById('profile-logout-btn');
         const topChips = Array.from(document.querySelectorAll('.top-chip'));
+        const emptyTemplateBtns = Array.from(document.querySelectorAll('.empty-template-btn'));
         const agentChips = Array.from(document.querySelectorAll('.agent-chip'));
         const railHistoryBtn = document.getElementById('rail-history-btn');
         const railEditorBtn = document.getElementById('rail-editor-btn');
@@ -1612,6 +1910,15 @@ const Interaction = {
         if (railEditorBtn) railEditorBtn.onclick = (e) => { e.stopPropagation(); this.toggleRailPopup('editor'); };
         if (railProfileBtn) railProfileBtn.onclick = (e) => { e.stopPropagation(); this.toggleRailPopup('profile'); };
         if (agentSendBtn) agentSendBtn.onclick = () => this.submitAgentInput();
+        if (agentInputEl) {
+            agentInputEl.onkeydown = (e) => {
+                if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                    e.preventDefault();
+                    this.submitAgentInput();
+                }
+            };
+            agentInputEl.onfocus = () => this.setAgentStatus('可用 Ctrl+Enter 快速发送', 'info');
+        }
         if (historyClearBtn) {
             historyClearBtn.onclick = (e) => {
                 e.stopPropagation();
@@ -1711,11 +2018,19 @@ const Interaction = {
                 if (applied) this.toast('镜像状态已切换');
             };
         }
+        if (emptyTemplateBtns.length) {
+            emptyTemplateBtns.forEach((btn) => {
+                btn.onclick = (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    this.createTemplateFlow(btn.dataset.template || '');
+                };
+            });
+        }
         if (topChips.length) {
-            topChips[0].onclick = () => this.toast('角色库入口已预留');
+            topChips[0].onclick = () => this.createTemplateFlow('character');
             if (topChips[1]) topChips[1].onclick = () => {
-                this.focusCanvasCenter();
-                this.openNodeMenuAt(window.innerWidth * 0.5, window.innerHeight * 0.35, null);
+                this.createTemplateFlow('storyboard');
             };
             if (topChips[2]) topChips[2].onclick = () => window.open('https://github.com/dcjrcjfc/infinite-canvas-aigc', '_blank');
         }
@@ -1752,9 +2067,9 @@ const Interaction = {
         if (profileTutorialBtn) profileTutorialBtn.onclick = () => this.toast('教程功能即将上线');
         if (profileLogoutBtn) profileLogoutBtn.onclick = () => this.toast('已执行登出占位动作');
         if (agentChips.length) {
-            if (agentChips[0]) agentChips[0].onclick = () => this.runAgentAction('idea');
-            if (agentChips[1]) agentChips[1].onclick = () => this.runAgentAction('role');
-            if (agentChips[2]) agentChips[2].onclick = () => this.runAgentAction('ref');
+            if (agentChips[0]) agentChips[0].onclick = () => this.runAgentAction('idea', agentChips[0]);
+            if (agentChips[1]) agentChips[1].onclick = () => this.runAgentAction('role', agentChips[1]);
+            if (agentChips[2]) agentChips[2].onclick = () => this.runAgentAction('ref', agentChips[2]);
         }
         if (zoomSlider) {
             zoomSlider.oninput = (e) => {
@@ -1776,6 +2091,7 @@ const Interaction = {
         }
         const panel = document.querySelector('.agent-panel');
         if (panel) this.setAgentPanelOpen(!panel.classList.contains('hidden'));
+        this.setAgentStatus('已就绪', 'info');
         this.loadHistory();
         if (historyFilter) historyFilter.value = State.historyFilter;
         this.updateUndoRedoUI();
@@ -1871,69 +2187,90 @@ const Interaction = {
         const ratio = node.dataset.ratio;
         const model = node.dataset.model || MODEL_OPTIONS[0].id;
         const btn = node.querySelector('.send-btn');
-        if (!prompt) return alert("请输入指令");
+        if (!prompt) {
+            this.toast('请输入指令', 'warn');
+            return;
+        }
+        if (!btn || btn.classList.contains('loading')) return;
 
+        const prevStatus = node.dataset.nodeStatus || '生成节点';
+        const prevBtnText = btn.textContent;
         btn.classList.add('loading');
+        btn.textContent = '…';
+        this.updateNodeStatus(node, '生成中');
 
         try {
-            let res;
             const sizeMap = { "1:1":"1024x1024", "16:9":"1792x1024", "9:16":"1024x1792" };
             const size = sizeMap[ratio] || "1024x1024";
             const refFiles = await this.getNodeReferenceFiles(node);
-
-            if (refFiles.length) {
-                const fd = new FormData();
-                refFiles.forEach((file, index) => fd.append('image', file, file.name || `reference_${index}.png`));
-                fd.append('prompt', prompt);
-                fd.append('model', model);
-                fd.append('image_size', '1K'); 
-                
-                res = await fetch(`${API_PROXY_BASE}/api/images/edits`, {
-                    method: "POST",
-                    headers: { "x-model-id": model },
-                    body: fd
-                });
-            } else {
-                res = await fetch(`${API_PROXY_BASE}/api/images/generations`, {
+            const requestFactory = () => {
+                if (refFiles.length) {
+                    const fd = new FormData();
+                    refFiles.forEach((file, index) => fd.append('image', file, file.name || `reference_${index}.png`));
+                    fd.append('prompt', prompt);
+                    fd.append('model', model);
+                    fd.append('image_size', '1K');
+                    return fetch(`${API_PROXY_BASE}/api/images/edits`, {
+                        method: "POST",
+                        headers: { "x-model-id": model },
+                        body: fd
+                    });
+                }
+                return fetch(`${API_PROXY_BASE}/api/images/generations`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json", "x-model-id": model },
                     body: JSON.stringify({ model, prompt, n: 1, size: size, image_size: "1K" })
                 });
-            }
+            };
 
-            const result = await res.json().catch(() => ({}));
-            console.log("API Result:", result); 
-            if (!res.ok) {
-                const serverErr = result?.error || result?.message || JSON.stringify(result);
-                alert(`代理请求失败(${res.status}): ${serverErr}`);
+            const { response, retryCount } = await this.fetchWithRetry(requestFactory, {
+                onRetry: ({ retryCount }) => {
+                    this.toast(`网络波动，自动重试中（${retryCount}/${API_MAX_RETRIES}）`, 'warn', 1500);
+                }
+            });
+            const result = await response.json().catch(() => ({}));
+
+            if (!response.ok) {
+                const errMeta = this.classifyApiError(response.status, result);
+                this.updateNodeStatus(node, prevStatus);
+                this.toast(errMeta.message, 'error', 2600);
                 return;
             }
-            if (result.data) {
-                node.querySelector('.media-container').innerHTML = `<img src="${result.data[0].url}">`;
-                this.updateNodeStatus(node, '已生成');
-                // 远程 URL 无法直接映射本地文件对象，后续需要时会按 URL 转 File
-                node._rawFile = null;
-                const img = node.querySelector('.media-container img');
-                if (img) {
-                    img.onload = () => {
-                        this.refreshDownstreamReferences(node);
-                        this.requestRender({ lines: true });
-                    };
-                } else {
+
+            const imageUrl = result?.data?.[0]?.url;
+            if (!imageUrl) {
+                this.updateNodeStatus(node, prevStatus);
+                this.toast('生成异常：服务未返回图片地址，请重试', 'error', 2400);
+                return;
+            }
+
+            node.querySelector('.media-container').innerHTML = `<img src="${imageUrl}">`;
+            this.updateNodeStatus(node, '已生成');
+            node._rawFile = null;
+            const img = node.querySelector('.media-container img');
+            if (img) {
+                img.onload = () => {
                     this.refreshDownstreamReferences(node);
                     this.requestRender({ lines: true });
-                }
-                this.pushHistory('generate', `生成成功：${model} / ${ratio} / ${prompt.slice(0, 26)}`, {
-                    nodeId: node.dataset.nodeId,
-                    scene: this.captureScene()
-                });
+                };
             } else {
-                alert("生成异常: " + JSON.stringify(result.error || result));
+                this.refreshDownstreamReferences(node);
+                this.requestRender({ lines: true });
             }
+            this.pushHistory('generate', `生成成功：${model} / ${ratio} / ${prompt.slice(0, 26)}`, {
+                nodeId: node.dataset.nodeId,
+                scene: this.captureScene()
+            });
+            if (retryCount > 0) this.toast(`生成成功（自动重试 ${retryCount} 次）`, 'success', 1900);
+            else this.toast('生成成功', 'success');
         } catch (err) {
-            alert("网络错误，请检查代理服务是否启动以及环境变量是否配置");
+            this.updateNodeStatus(node, prevStatus);
+            const errMeta = this.classifyApiError(0, null, err?.message || '');
+            this.toast(errMeta.message, 'error', 2600);
+        } finally {
+            btn.classList.remove('loading');
+            btn.textContent = prevBtnText || '↑';
         }
-        finally { btn.classList.remove('loading'); }
     },
 
     closeAllNodePopovers() {

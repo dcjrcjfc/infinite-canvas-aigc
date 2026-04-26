@@ -18,6 +18,21 @@
         <span class="empty-badge">✦ 双击</span>
         <span class="empty-text">画布自由生成, 或者看模板</span>
     </div>
+    <p class="empty-subline">也可以直接使用模板，一键生成基础创作链路</p>
+    <div class="empty-template-row">
+        <button class="empty-template-btn" data-template="character" type="button">
+            <span class="empty-template-title">角色设定流</span>
+            <span class="empty-template-desc">人设文本 → 风格探索 → 主视觉</span>
+        </button>
+        <button class="empty-template-btn" data-template="storyboard" type="button">
+            <span class="empty-template-title">分镜草案流</span>
+            <span class="empty-template-desc">剧情大纲 → 镜头 A → 镜头 B</span>
+        </button>
+        <button class="empty-template-btn" data-template="poster" type="button">
+            <span class="empty-template-title">海报概念流</span>
+            <span class="empty-template-desc">概念文案 → 构图草图 → 终稿海报</span>
+        </button>
+    </div>
 </section>
 
 <header class="app-topbar">
@@ -49,7 +64,10 @@
         </div>
         <textarea class="agent-input" placeholder="描述想法，或指定节点添加上下文..."></textarea>
         <div class="agent-footer">
-            <span class="agent-mode">Pro</span>
+            <div class="agent-foot-meta">
+                <span class="agent-mode">Pro</span>
+                <span id="agent-status" class="agent-status">已就绪</span>
+            </div>
             <button id="agent-send-btn" class="agent-send-btn">↑</button>
         </div>
     </div>

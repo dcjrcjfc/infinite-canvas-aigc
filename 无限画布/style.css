@@ -70,6 +70,56 @@
             color: #9fa7b8;
             font-size: 20px;
         }
+        .empty-subline {
+            margin: 0;
+            color: #7e879b;
+            font-size: 13px;
+            letter-spacing: 0.2px;
+            text-align: center;
+            text-shadow: 0 8px 20px rgba(0,0,0,0.34);
+        }
+        .empty-template-row {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 10px;
+            width: min(740px, calc(100vw - 120px));
+            margin-top: 4px;
+        }
+        .empty-template-btn {
+            pointer-events: auto;
+            border: 1px solid #303745;
+            border-radius: 14px;
+            background: linear-gradient(180deg, rgba(24, 27, 35, 0.92), rgba(18, 21, 28, 0.92));
+            color: #d7deef;
+            padding: 12px 12px 11px;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            text-align: left;
+            cursor: pointer;
+            box-shadow: 0 12px 24px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.08);
+            transition: border-color 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+        }
+        .empty-template-btn:hover {
+            border-color: #6c7da8;
+            background: linear-gradient(180deg, rgba(36, 43, 58, 0.96), rgba(23, 30, 42, 0.96));
+            box-shadow: 0 0 0 1px rgba(131, 156, 220, 0.26), 0 14px 28px rgba(0,0,0,0.38), inset 0 1px 0 rgba(255,255,255,0.11);
+            transform: translateY(-1px);
+        }
+        .empty-template-btn:active {
+            transform: translateY(0);
+        }
+        .empty-template-title {
+            font-size: 13px;
+            font-weight: 600;
+            letter-spacing: 0.2px;
+            color: #f3f7ff;
+        }
+        .empty-template-desc {
+            font-size: 11px;
+            line-height: 1.35;
+            color: #9eabc5;
+        }
         .empty-chip-row {
             display: flex;
             align-items: center;
@@ -291,7 +341,7 @@
         .model-item-icon { width: 16px; display: inline-flex; justify-content: center; }
         .model-item-label { font-size: 12px; }
         .send-btn { width: 34px; height: 34px; background: linear-gradient(180deg, #5f6677, #4b5160); border: 1px solid #747d8f; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; color: #f4f6fa; box-shadow: 0 8px 20px rgba(0,0,0,0.36), inset 0 1px 0 rgba(255,255,255,0.2); }
-        .send-btn.loading { animation: pulse 1s infinite; color: #fff; pointer-events: none; }
+        .send-btn.loading { animation: pulse 1s infinite; color: #fff; pointer-events: none; cursor: wait; }
         @keyframes pulse { 50% { opacity: 0.3; } }
         .ratio-popover { position: absolute; bottom: 85px; left: 50%; transform: translateX(-50%); width: 300px; background: linear-gradient(180deg, #252831, #1c1f27); border: 1px solid #3c4150; border-radius: 16px; padding: 18px; display: none; z-index: 100; box-shadow: 0 20px 50px rgba(0,0,0,0.8); }
         .ratio-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-top: 14px; }
@@ -343,9 +393,9 @@
             gap: 10px;
             padding: 8px 12px;
             border-radius: 999px;
-            background: rgba(18, 18, 20, 0.86);
-            border: 1px solid #2e2e33;
-            box-shadow: 0 12px 28px rgba(0,0,0,0.34);
+            background: linear-gradient(180deg, rgba(31, 34, 43, 0.92), rgba(22, 24, 31, 0.92));
+            border: 1px solid #353c4a;
+            box-shadow: 0 12px 28px rgba(0,0,0,0.34), inset 0 1px 0 rgba(255,255,255,0.09);
         }
         .brand-dot {
             width: 14px;
@@ -366,13 +416,22 @@
         }
         .top-chip {
             border: 1px solid #2f323c;
-            background: rgba(22, 23, 28, 0.9);
+            background: linear-gradient(180deg, rgba(31, 33, 41, 0.92), rgba(24, 26, 34, 0.92));
             color: #d4d8e4;
             font-size: 13px;
             border-radius: 999px;
             padding: 8px 14px;
             cursor: pointer;
             box-shadow: 0 10px 20px rgba(0,0,0,0.32), inset 0 1px 0 rgba(255,255,255,0.08);
+        }
+        .top-chip:hover {
+            border-color: #60739f;
+            color: #f0f4ff;
+            box-shadow: 0 0 0 1px rgba(114, 146, 214, 0.24), 0 12px 24px rgba(0,0,0,0.36), inset 0 1px 0 rgba(255,255,255,0.12);
+            transform: translateY(-1px);
+        }
+        .top-chip:active {
+            transform: translateY(0);
         }
         .top-chip-light {
             background: #eceff7;
@@ -784,17 +843,42 @@
             font-size: 13px;
             line-height: 1.45;
         }
+        .agent-input:focus {
+            border-color: #5a77c4;
+            box-shadow: 0 0 0 1px rgba(121, 154, 235, 0.25), 0 12px 24px rgba(0,0,0,0.24);
+        }
         .agent-footer {
             display: flex;
             align-items: center;
             justify-content: space-between;
             padding: 0 4px;
         }
+        .agent-foot-meta {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            min-width: 0;
+        }
         .agent-mode {
             color: #cfd5e2;
             font-size: 16px;
             font-weight: 600;
         }
+        .agent-status {
+            border: 1px solid #3a4152;
+            border-radius: 999px;
+            padding: 3px 8px;
+            font-size: 11px;
+            line-height: 1;
+            color: #c8d1e8;
+            background: #1a202d;
+            white-space: nowrap;
+        }
+        .agent-status.is-info { border-color: #3a4152; color: #c8d1e8; background: #1a202d; }
+        .agent-status.is-busy { border-color: #5f6990; color: #e4ecff; background: #232d43; }
+        .agent-status.is-success { border-color: #3e7052; color: #d4f5de; background: #1d3528; }
+        .agent-status.is-warn { border-color: #7e6331; color: #ffe9be; background: #3a2c18; }
+        .agent-status.is-error { border-color: #804a4a; color: #ffd6d6; background: #3b1f23; }
         .agent-send-btn {
             width: 34px;
             height: 34px;
@@ -804,6 +888,24 @@
             color: #fff;
             cursor: pointer;
             box-shadow: 0 8px 18px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.22);
+        }
+        .agent-send-btn.loading {
+            animation: pulse 1s infinite;
+            cursor: wait;
+            opacity: 0.85;
+        }
+        .agent-send-btn:disabled {
+            pointer-events: none;
+        }
+        .agent-chip.is-running {
+            border-color: #6d7ba5;
+            color: #eef4ff;
+            background: linear-gradient(180deg, #2b3445, #232a37);
+            box-shadow: 0 0 0 1px rgba(126, 154, 214, 0.32), 0 12px 22px rgba(0,0,0,0.32), inset 0 1px 0 rgba(255,255,255,0.12);
+        }
+        .agent-chip:disabled {
+            pointer-events: none;
+            opacity: 0.65;
         }
         .agent-fab {
             position: fixed;
@@ -847,6 +949,10 @@
             opacity: 1;
             transform: translateY(0);
         }
+        .toast.toast-info { border-color: #3c4456; color: #e5ebf9; background: rgba(20, 24, 32, 0.96); }
+        .toast.toast-success { border-color: #47795c; color: #d7f4e1; background: rgba(19, 35, 27, 0.96); }
+        .toast.toast-warn { border-color: #8a7241; color: #ffe8bb; background: rgba(43, 33, 19, 0.96); }
+        .toast.toast-error { border-color: #8f5358; color: #ffd9de; background: rgba(44, 22, 25, 0.96); }
 
         .canvas-controls {
             position: fixed;
@@ -895,9 +1001,22 @@
             .empty-text {
                 font-size: 18px;
             }
-            .empty-chip {
-                font-size: 13px;
-                padding: 6px 10px;
+            .empty-subline {
+                font-size: 12px;
+            }
+            .empty-template-row {
+                grid-template-columns: 1fr;
+                width: min(460px, calc(100vw - 72px));
+                gap: 8px;
+            }
+            .empty-template-btn {
+                padding: 10px 11px;
+            }
+            .empty-template-title {
+                font-size: 12px;
+            }
+            .empty-template-desc {
+                font-size: 10px;
             }
             .agent-panel {
                 width: 320px;
