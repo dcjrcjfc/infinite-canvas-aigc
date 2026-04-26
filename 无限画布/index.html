@@ -11,6 +11,7 @@
     <div id="canvas">
         <svg id="svg-layer"><g id="links-container"></g><path id="temp-line" d=""></path></svg>
     </div>
+    <div id="selection-marquee" class="selection-marquee"></div>
 </div>
 <section id="canvas-empty-state" class="canvas-empty-state">
     <div class="empty-headline">
@@ -81,7 +82,20 @@
 
 <div id="rail-history-panel" class="rail-popup-panel">
     <div class="rail-popup-title">历史</div>
-    <div class="rail-popup-actions">
+    <div class="history-toolbar">
+        <select id="history-filter" class="history-filter" aria-label="历史筛选">
+            <option value="all">全部</option>
+            <option value="node">节点</option>
+            <option value="link">连线</option>
+            <option value="edit">编辑</option>
+            <option value="upload">上传</option>
+            <option value="generate">生成</option>
+            <option value="agent">Agent</option>
+        </select>
+    </div>
+    <div class="rail-popup-actions history-actions">
+        <button id="history-undo-btn" class="rail-mini-btn" type="button">撤销</button>
+        <button id="history-redo-btn" class="rail-mini-btn" type="button">重做</button>
         <button id="history-clear-btn" class="rail-mini-btn" type="button">清空</button>
     </div>
     <div id="history-list" class="history-list"></div>

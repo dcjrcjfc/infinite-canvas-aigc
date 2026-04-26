@@ -31,8 +31,8 @@
 ### 2.3 模型与鉴权
 
 - 节点内模型下拉选择（当前支持 `NanoBanana` / `gpt-image-2`）
-- 按模型路由不同 API Key
-- 模型切换后请求自动带入对应 `model` 和 `Authorization`
+- 前端仅请求本地代理接口（不再持有 API Key）
+- 代理服务按模型路由不同后端环境变量 Key
 
 ### 2.4 交互与 UI
 
@@ -50,7 +50,7 @@
 - `HTML`：结构层
 - `CSS`：样式与动效
 - `Vanilla JavaScript`：交互与业务逻辑
-- 浏览器 `fetch`：直接调用图像生成 API
+- `Node.js` 原生 `http/https`：本地安全代理（`proxy-server.js`）
 
 分层约束（开发时必须遵守）：
 
@@ -66,6 +66,8 @@
 ├─ PROJECT_STATUS.md
 ├─ CHANGELOG.md
 ├─ 项目说明.md
+├─ proxy-server.js
+├─ .env.example
 ├─ 参考资料/
 │  └─ *.png
 └─ 无限画布/
@@ -76,27 +78,48 @@
 
 ## 5. 本地运行
 
-### 方式 A：直接打开
+### 安全运行（推荐）
 
-直接打开 `无限画布/index.html` 即可运行。
+1. 配置环境变量（PowerShell 示例）：
 
-### 方式 B：静态服务（推荐）
+```powershell
+$env:NANOBANANA_API_KEY="sk-xxxxx"
+$env:GPT_IMAGE_2_API_KEY="sk-xxxxx"
+```
 
-用任意静态服务器托管项目根目录，避免浏览器部分本地文件限制。
+2. 启动代理服务：
+
+```powershell
+node proxy-server.js
+```
+
+3. 打开：
+
+```text
+http://127.0.0.1:8787
+```
+
+### 直接打开 HTML（仅预览）
+
+直接打开 `无限画布/index.html` 只适合预览 UI。  
+涉及生图请求时，请使用上面的代理服务方式。
 
 ## 6. API 配置说明
 
-当前在 `无限画布/script.js` 中通过常量配置 API Key（前端明文）：
+当前模式：前端调用同源代理接口，密钥只保存在后端环境变量。
 
-- `T8STAR_API_KEY`
-- `GPT_IMAGE_2_API_KEY`
+- 前端请求：
+  - `POST /api/images/generations`
+  - `POST /api/images/edits`
+  - 请求头需带 `x-model-id`
+- 后端环境变量：
+  - `NANOBANANA_API_KEY`
+  - `GPT_IMAGE_2_API_KEY`
 
-当前模型与 Key 的映射在 `getApiKeyByModel(modelId)` 中维护。  
 新增模型时建议同步更新：
 
-1. `MODEL_OPTIONS`
-2. `getApiKeyByModel`
-3.（可选）请求参数映射逻辑
+1. `无限画布/script.js` 的 `MODEL_OPTIONS`
+2. `proxy-server.js` 的 `MODEL_KEY_ENV`
 
 ## 7. 主要交互速查
 
@@ -111,16 +134,15 @@
 
 ## 8. 已知限制与风险
 
-- 前端明文 API Key 不适合生产环境
+- 代理服务环境变量泄露风险（需做好部署环境权限与日志脱敏）
 - 网络波动会影响 API 请求与 Git 推送
 - 模型可用性受平台分组/通道配置影响（无通道会报错）
 
 ## 9. 下一步规划（简版）
 
-1. 节点系统增强（图标、重命名、复制/粘贴）
-2. 参考图工作流增强（主参考标记、权重、顺序）
-3. Agent 与空状态交互细化（提示、过渡、反馈）
-4. API 改为后端代理，移除前端明文 Key
+1. 代理服务生产化（鉴权校验、限流、审计日志）
+2. Agent 与空状态交互细化（提示、过渡、反馈）
+3. 接口错误提示与重试策略完善
 
 ## 10. 协作与提交规范
 
