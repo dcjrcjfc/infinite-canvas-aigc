@@ -65,7 +65,11 @@
         <textarea class="agent-input" placeholder="描述想法，或指定节点添加上下文..."></textarea>
         <div class="agent-footer">
             <div class="agent-foot-meta">
-                <span class="agent-mode">Pro</span>
+                <select id="agent-llm-select" class="agent-llm-select" aria-label="Agent 模型选择">
+                    <option value="gemini">Gemini</option>
+                    <option value="chatgpt">ChatGPT</option>
+                    <option value="deepseek">DeepSeek</option>
+                </select>
                 <span id="agent-status" class="agent-status">已就绪</span>
             </div>
             <button id="agent-send-btn" class="agent-send-btn">↑</button>
@@ -99,16 +103,10 @@
 </aside>
 
 <div id="rail-history-panel" class="rail-popup-panel">
-    <div class="rail-popup-title">历史</div>
+    <div class="rail-popup-title">生成历史</div>
     <div class="history-toolbar">
         <select id="history-filter" class="history-filter" aria-label="历史筛选">
-            <option value="all">全部</option>
-            <option value="node">节点</option>
-            <option value="link">连线</option>
-            <option value="edit">编辑</option>
-            <option value="upload">上传</option>
             <option value="generate">生成</option>
-            <option value="agent">Agent</option>
         </select>
     </div>
     <div class="rail-popup-actions history-actions">

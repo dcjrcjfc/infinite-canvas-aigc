@@ -1,7 +1,24 @@
-const MODEL_OPTIONS = [
+const IMAGE_MODEL_OPTIONS = [
     { id: "gemini-3.1-flash-image-preview-4k", label: "NanoBanana", icon: "🍌" },
-    { id: "gpt-image-2", label: "gpt-image-2", icon: "🌀" }
+    { id: "gpt-image-2", label: "gpt-image-2", icon: "🌀" },
+    { id: "midjourney", label: "Midjourney", icon: "🎨" },
+    { id: "jimeng-ai", label: "即梦AI", icon: "✨" }
 ];
+const VIDEO_MODEL_OPTIONS = [
+    { id: "seedance", label: "Seedance", icon: "🎬" },
+    { id: "keling", label: "可灵", icon: "📽️" }
+];
+const NODE_MODEL_OPTIONS = {
+    text: IMAGE_MODEL_OPTIONS,
+    image: IMAGE_MODEL_OPTIONS,
+    video: VIDEO_MODEL_OPTIONS
+};
+const MODEL_OPTIONS = [...IMAGE_MODEL_OPTIONS, ...VIDEO_MODEL_OPTIONS];
+const AGENT_LLM_LABELS = {
+    gemini: "Gemini",
+    chatgpt: "ChatGPT",
+    deepseek: "DeepSeek"
+};
 const API_PROXY_BASE = window.location.protocol === "file:" ? "http://127.0.0.1:8787" : window.location.origin;
 const SUPPORTS_CSS_ZOOM = typeof CSS !== "undefined" && typeof CSS.supports === "function" && CSS.supports("zoom", "1");
 const HISTORY_STORAGE_KEY = "infinite_canvas_history_v1";
@@ -132,8 +149,32 @@ const TEMPLATE_PRESETS = {
     }
 };
 
-function getModelMeta(modelId) {
-    return MODEL_OPTIONS.find((model) => model.id === modelId) || MODEL_OPTIONS[0];
+function getModelOptionsByNodeType(nodeType) {
+    return NODE_MODEL_OPTIONS[nodeType] || IMAGE_MODEL_OPTIONS;
+}
+
+function getDefaultModelByNodeType(nodeType) {
+    return getModelOptionsByNodeType(nodeType)[0] || IMAGE_MODEL_OPTIONS[0];
+}
+
+function normalizeModelIdForNodeType(modelId, nodeType) {
+    const models = getModelOptionsByNodeType(nodeType);
+    if (models.some((model) => model.id === modelId)) return modelId;
+    return getDefaultModelByNodeType(nodeType)?.id || IMAGE_MODEL_OPTIONS[0].id;
+}
+
+function getModelMeta(modelId, nodeType = null) {
+    if (nodeType) {
+        const scoped = getModelOptionsByNodeType(nodeType).find((model) => model.id === modelId);
+        if (scoped) return scoped;
+    }
+    return MODEL_OPTIONS.find((model) => model.id === modelId) || IMAGE_MODEL_OPTIONS[0];
+}
+
+function getSelectedAgentLLMLabel() {
+    const select = document.getElementById('agent-llm-select');
+    const key = select?.value || 'gemini';
+    return AGENT_LLM_LABELS[key] || AGENT_LLM_LABELS.gemini;
 }
 
 function getNodeMeta(type) {
@@ -146,7 +187,7 @@ const State = {
     linking: { active: false, startEl: null }, uploadContext: null, menuConnectorEl: null,
     history: [],
     historySeq: 0,
-    historyFilter: "all",
+    historyFilter: "generate",
     undoStack: [],
     redoStack: [],
     multiSelection: [],
@@ -208,23 +249,24 @@ const UI = {
     createNode(type, pos, url = null, options = {}) {
         const withPrompt = options.withPrompt !== false;
         const nodeMeta = getNodeMeta(type);
+        const modelOptions = getModelOptionsByNodeType(type);
         const node = document.createElement('div');
         node.className = 'node';
         node.style.left = pos.x + 'px'; node.style.top = pos.y + 'px';
         node.dataset.nodeId = `node_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
-        node.dataset.model = MODEL_OPTIONS[0].id;
+        node.dataset.model = normalizeModelIdForNodeType(options.modelId || modelOptions[0]?.id, type);
         node.dataset.ratio = "1:1";
         node.dataset.nodeType = type;
         node.dataset.nodeName = options.nodeName || this.getNextNodeName(type);
         node.dataset.nodeStatus = options.status || (withPrompt ? '生成节点' : '素材节点');
-        const modelMeta = getModelMeta(node.dataset.model);
+        const modelMeta = getModelMeta(node.dataset.model, type);
 
         const ratios = ["1:1","16:9","9:16","4:3","3:4","2:3","3:2","7:4","4:7","21:9"];
         const ratioGridHTML = ratios.map(r => {
             const ratioClass = `ratio-shape-${r.replace(':', '-')}`;
             return `<div class="ratio-item ${r==='1:1'?'active':''}" data-ratio="${r}"><div class="ratio-visual-box"><div class="ratio-shape ${ratioClass}"></div></div><div class="ratio-label">${r}</div></div>`;
         }).join('');
-        const modelListHTML = MODEL_OPTIONS.map((model) => {
+        const modelListHTML = modelOptions.map((model) => {
             const activeClass = model.id === node.dataset.model ? "active" : "";
             return `<button class="model-item ${activeClass}" data-model-id="${model.id}" type="button"><span class="model-item-icon">${model.icon}</span><span class="model-item-label">${model.label}</span></button>`;
         }).join('');
@@ -774,16 +816,19 @@ const Interaction = {
         });
         const nodeId = idOverride || (preserveId ? snapshot.id : null);
         if (nodeId) nodeEl.dataset.nodeId = nodeId;
-        nodeEl.dataset.model = snapshot.model || MODEL_OPTIONS[0].id;
+        nodeEl.dataset.model = normalizeModelIdForNodeType(snapshot.model, snapshot.type);
         nodeEl.dataset.ratio = snapshot.ratio || '1:1';
         this.updateNodeStatus(nodeEl, snapshot.status || nodeEl.dataset.nodeStatus);
         this.applyNodeName(nodeEl, snapshot.name || snapshot.nodeName || nodeEl.dataset.nodeName);
 
         const modelBtn = nodeEl.querySelector('.model-switch');
         if (modelBtn) {
-            const modelMeta = getModelMeta(nodeEl.dataset.model);
+            const modelMeta = getModelMeta(nodeEl.dataset.model, snapshot.type);
             modelBtn.textContent = `${modelMeta.icon} ${modelMeta.label}`;
         }
+        nodeEl.querySelectorAll('.model-item').forEach((item) => {
+            item.classList.toggle('active', item.dataset.modelId === nodeEl.dataset.model);
+        });
         const ratioBtn = nodeEl.querySelector('.ratio-toggle');
         if (ratioBtn) ratioBtn.innerText = `⬜ ${nodeEl.dataset.ratio}`;
 
@@ -893,7 +938,7 @@ const Interaction = {
                 time: item.time || new Date().toLocaleString(),
                 nodeId: item.nodeId || null,
                 scene: item.scene || null
-            })) : [];
+            })).filter((item) => item.type === 'generate') : [];
         } catch {
             State.history = [];
         }
@@ -907,11 +952,13 @@ const Interaction = {
 
     saveHistory() {
         try {
-            localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(State.history.slice(0, MAX_HISTORY_ITEMS)));
+            const generateOnly = State.history.filter((item) => item.type === 'generate').slice(0, MAX_HISTORY_ITEMS);
+            localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(generateOnly));
         } catch {}
     },
 
     pushHistory(type, text, meta = {}) {
+        if (type !== 'generate') return;
         const scene = meta.scene ? JSON.parse(JSON.stringify(meta.scene)) : null;
         State.history.unshift({
             id: this.nextHistoryId(),
@@ -930,12 +977,14 @@ const Interaction = {
         const list = document.getElementById('history-list');
         if (!list) return;
         if (!State.history.length) {
-            list.innerHTML = `<div class="rail-popup-body">暂无历史记录</div>`;
+            list.innerHTML = `<div class="rail-popup-body">暂无生成历史</div>`;
             return;
         }
-        const filtered = State.historyFilter === 'all' ? State.history : State.history.filter((item) => item.type === State.historyFilter);
+        const filtered = State.historyFilter === 'generate'
+            ? State.history.filter((item) => item.type === 'generate')
+            : State.history;
         if (!filtered.length) {
-            list.innerHTML = `<div class="rail-popup-body">当前筛选条件下暂无记录</div>`;
+            list.innerHTML = `<div class="rail-popup-body">暂无生成记录</div>`;
             return;
         }
         list.innerHTML = filtered.map((item) => {
@@ -1009,7 +1058,7 @@ const Interaction = {
                 name: nodeEl.dataset.nodeName || nodeEl.querySelector('.node-label')?.textContent?.trim() || '',
                 status: nodeEl.dataset.nodeStatus || '',
                 withPrompt: !!nodeEl.querySelector('.ai-panel'),
-                model: nodeEl.dataset.model || MODEL_OPTIONS[0].id,
+                model: nodeEl.dataset.model || getDefaultModelByNodeType(node.type)?.id,
                 ratio: nodeEl.dataset.ratio || '1:1',
                 prompt: promptInput ? promptInput.value : '',
                 textValue: textInput ? textInput.value : '',
@@ -1293,6 +1342,7 @@ const Interaction = {
         const sendBtn = document.getElementById('agent-send-btn');
         if (sendBtn?.disabled && sendBtn.classList.contains('loading')) return;
         const agentInput = document.querySelector('.agent-input');
+        const llmLabel = getSelectedAgentLLMLabel();
         const selectedNode = State.selection.type === 'node' ? State.selection.item : null;
         const selectedPromptInput = selectedNode?.querySelector('.ai-panel .ai-input');
         const presets = {
@@ -1303,14 +1353,14 @@ const Interaction = {
         const text = presets[type] || "";
         if (!text) return;
         this.setAgentBusy(true);
-        this.setAgentStatus('Agent 正在整理建议...', 'busy');
+        this.setAgentStatus(`${llmLabel} 正在整理建议...`, 'busy');
         if (triggerEl) triggerEl.classList.add('is-running');
         try {
             await this.sleep(220);
             if (agentInput) agentInput.value = text;
             if (selectedPromptInput) selectedPromptInput.value = text;
             this.pushHistory('agent', `Agent动作：${type}`);
-            this.setAgentStatus('建议已填入，可直接发送', 'success');
+            this.setAgentStatus(`建议已填入，可直接发送（${llmLabel}）`, 'success');
             this.toast('已填入 Agent / 节点输入', 'success');
         } finally {
             this.setAgentBusy(false);
@@ -1323,6 +1373,7 @@ const Interaction = {
         const sendBtn = document.getElementById('agent-send-btn');
         if (sendBtn?.disabled && sendBtn.classList.contains('loading')) return;
         const input = document.querySelector('.agent-input');
+        const llmLabel = getSelectedAgentLLMLabel();
         const text = input?.value.trim();
         if (!text) {
             this.setAgentStatus('请先输入内容', 'warn');
@@ -1330,7 +1381,7 @@ const Interaction = {
             return;
         }
         this.setAgentBusy(true);
-        this.setAgentStatus('正在发送到画布...', 'busy');
+        this.setAgentStatus(`正在通过 ${llmLabel} 发送到画布...`, 'busy');
         try {
             if (State.selection.type === 'node' && State.selection.item?.querySelector('.ai-panel .ai-input')) {
                 State.selection.item.querySelector('.ai-panel .ai-input').value = text;
@@ -1880,6 +1931,7 @@ const Interaction = {
         const agentCollapseBtn = document.getElementById('agent-collapse-btn');
         const agentFabBtn = document.getElementById('agent-fab');
         const agentSendBtn = document.getElementById('agent-send-btn');
+        const agentLlmSelect = document.getElementById('agent-llm-select');
         const agentInputEl = document.querySelector('.agent-input');
         const agentHeaderBtns = Array.from(document.querySelectorAll('.agent-header-actions .agent-icon-btn'));
         const historyClearBtn = document.getElementById('history-clear-btn');
@@ -1917,7 +1969,13 @@ const Interaction = {
                     this.submitAgentInput();
                 }
             };
-            agentInputEl.onfocus = () => this.setAgentStatus('可用 Ctrl+Enter 快速发送', 'info');
+            agentInputEl.onfocus = () => this.setAgentStatus(`当前模型：${getSelectedAgentLLMLabel()}，可用 Ctrl+Enter 快速发送`, 'info');
+        }
+        if (agentLlmSelect) {
+            agentLlmSelect.onchange = () => {
+                this.setAgentStatus(`已切换到 ${getSelectedAgentLLMLabel()}`, 'success');
+                this.scheduleAgentReady(1200);
+            };
         }
         if (historyClearBtn) {
             historyClearBtn.onclick = (e) => {
@@ -1942,7 +2000,7 @@ const Interaction = {
         }
         if (historyFilter) {
             historyFilter.onchange = (e) => {
-                State.historyFilter = e.target.value || 'all';
+                State.historyFilter = e.target.value || 'generate';
                 this.renderHistory();
             };
         }
@@ -2185,7 +2243,9 @@ const Interaction = {
     async runAI(node) {
         const prompt = node.querySelector('.ai-panel .ai-input').value.trim();
         const ratio = node.dataset.ratio;
-        const model = node.dataset.model || MODEL_OPTIONS[0].id;
+        const nodeType = node.dataset.nodeType || 'image';
+        const model = normalizeModelIdForNodeType(node.dataset.model, nodeType);
+        node.dataset.model = model;
         const btn = node.querySelector('.send-btn');
         if (!prompt) {
             this.toast('请输入指令', 'warn');
@@ -2280,12 +2340,14 @@ const Interaction = {
 
     selectNodeModel(node, modelId) {
         if (!node || !modelId) return;
-        const modelMeta = getModelMeta(modelId);
+        const nodeType = node.dataset.nodeType || 'image';
+        const normalizedModelId = normalizeModelIdForNodeType(modelId, nodeType);
+        const modelMeta = getModelMeta(normalizedModelId, nodeType);
         node.dataset.model = modelMeta.id;
         const modelBtn = node.querySelector('.model-switch');
         if (modelBtn) modelBtn.textContent = `${modelMeta.icon} ${modelMeta.label}`;
         node.querySelectorAll('.model-item').forEach((item) => {
-            item.classList.toggle('active', item.dataset.modelId === modelMeta.id);
+            item.classList.toggle('active', item.dataset.modelId === normalizedModelId);
         });
         const pop = node.querySelector('.model-popover');
         if (pop) pop.style.display = 'none';

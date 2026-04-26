@@ -24,7 +24,11 @@ const CONTENT_TYPES = {
 
 const MODEL_KEY_ENV = {
     "gpt-image-2": "GPT_IMAGE_2_API_KEY",
-    "gemini-3.1-flash-image-preview-4k": "NANOBANANA_API_KEY"
+    "gemini-3.1-flash-image-preview-4k": "NANOBANANA_API_KEY",
+    "midjourney": "NANOBANANA_API_KEY",
+    "jimeng-ai": "NANOBANANA_API_KEY",
+    "seedance": "NANOBANANA_API_KEY",
+    "keling": "NANOBANANA_API_KEY"
 };
 
 function getCorsHeaders() {
