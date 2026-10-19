@@ -124,3 +124,18 @@ test('released long-press click-to-connect mode does not block saving the curren
     assert.equal((await a.ProjectStore.load()).scene.nodes.length, 1);
     a.w.dispatchEvent(new a.w.Event('blur'));
 });
+
+test('fixture teardown drains in-flight autosave before closing its document', async t => {
+    const a = await canvasApp(t); a.node();
+    let complete;
+    a.ProjectStore.save = () => new Promise(resolve => { complete = resolve; });
+    const saving = a.w.Workspace.save();
+    assert.equal(a.w.Workspace.saving, true);
+    let closed = false; const disposal = a.dispose().then(() => { closed = true; });
+    await Promise.resolve();
+    assert.equal(closed, false, 'teardown must not close the document before the save continuation');
+    assert.ok(a.w.document.getElementById('project-status'));
+    complete(1); await saving; await disposal;
+    assert.equal(closed, true); assert.equal(a.w.document, undefined);
+    await a.dispose();
+});

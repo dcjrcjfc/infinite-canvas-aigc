@@ -8,7 +8,11 @@ async function canvasApp(t, { cssZoom = true } = {}) {
     const dom = new JSDOM(fs.readFileSync(path.join(root, 'index.html'), 'utf8'), {
         url: 'http://127.0.0.1:8787/', runScripts: 'outside-only', pretendToBeVisual: true
     });
-    const w = dom.window, frames = new Map(); let nextFrame = 0;
+    const w = dom.window, frames = new Map(), observers = new Set(); let nextFrame = 0;
+    const NativeMutationObserver = w.MutationObserver;
+    w.MutationObserver = class extends NativeMutationObserver {
+        constructor(callback) { super(callback); observers.add(this); }
+    };
     w.requestAnimationFrame = callback => { const id = ++nextFrame; frames.set(id, callback); return id; };
     w.cancelAnimationFrame = id => frames.delete(id);
     w.indexedDB = new IDBFactory(); w.CSS = { supports: () => cssZoom }; w.structuredClone = structuredClone;
@@ -40,7 +44,21 @@ async function canvasApp(t, { cssZoom = true } = {}) {
     Object.defineProperties(api.viewport, { clientWidth: { value: 1000 }, clientHeight: { value: 800 } });
     for (let i = 0; i < 100 && !w.Workspace.ready; i++) await new Promise(resolve => setTimeout(resolve, 5));
     api.frame(0); api.State.canvas = { x: 0, y: 0, scale: 1 };
-    t.after(() => { api.navigation.dispose(); clearTimeout(api.Interaction.persistTimer); dom.window.close(); });
+    api.dispose = () => {
+        if (api.disposal) return api.disposal;
+        api.disposal = (async () => {
+            api.navigation.dispose();
+            w.Workspace.ready = false; w.Workspace.dirty = false;
+            w.clearTimeout(api.Interaction.persistTimer); w.clearTimeout(w.Workspace.timer);
+            // A fake IndexedDB write may already be in flight on slower runners.
+            // Its Workspace continuation still needs the document for save status.
+            while (w.Workspace.saving) { try { await w.Workspace.savePromise; } catch {} }
+            observers.forEach(observer => observer.disconnect()); frames.clear();
+            dom.window.close();
+        })();
+        return api.disposal;
+    };
+    t.after(api.dispose);
     return api;
 }
 module.exports = { canvasApp };
