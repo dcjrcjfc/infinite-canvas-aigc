@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>登录 · Infinite Canvas</title>
+  <link rel="stylesheet" href="/login.css">
+  <script src="/assets/pix/data.js" defer></script>
+  <script src="/login-scene.js" defer></script>
+  <script src="/login.js" defer></script>
+</head>
+<body>
+<main id="stage">
+  <video id="mobile-background" muted loop playsinline preload="none" poster="/assets/pix/mobile-poster.jpg" aria-hidden="true"></video>
+  <div class="mobile-shade" aria-hidden="true"></div>
+  <canvas id="orbit" aria-label="三维模型地球，可拖动旋转"></canvas>
+  <span id="model-selection-status" class="visually-hidden" role="status"></span>
+  <header class="nav">
+    <div class="nav-actions">
+      <button id="language" class="language" type="button" aria-label="语言" aria-expanded="false" aria-controls="language-menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c5 5 5 13 0 18-5-5-5-13 0-18Z"/></svg></button>
+      <div id="language-menu" role="menu" aria-label="选择语言" hidden><button type="button" role="menuitemradio" aria-checked="true" aria-current="true" lang="zh-CN" data-lang="zh-CN">简体中文 <span>✓</span></button><button type="button" role="menuitemradio" aria-checked="false" aria-current="false" lang="en" data-lang="en">English</button></div>
+    </div>
+  </header>
+  <section class="hero" aria-label="创作入口">
+    <h1><span id="prefix">让 AI 为你</span><span id="verb">生成图片</span></h1>
+    <p class="hero-copy"><span id="promise">从一句想象，到一眼惊艳。</span><span id="detail">角色、商品、场景，让灵感有形。</span></p>
+    <div class="actions"><button class="primary" data-login type="button">登录</button><a class="secondary" href="/?entry=canvas" data-guest>先逛逛</a></div>
+  </section>
+  <section class="mobile-hero" aria-label="统一入口 连接所有 AI">
+    <h1 id="mobile-title">统一入口<br>连接所有 <em>AI</em></h1>
+    <p id="mobile-copy">一个账户，接入 AI 工作台、算力资源<br>与模型市场。无需在多个平台间切换。</p>
+    <div class="actions"><button class="primary" data-login type="button">登录</button><a class="secondary" href="/?entry=canvas" data-guest>先逛逛</a></div>
+  </section>
+  <p class="mobile-footer">主流大模型统一 API 网关　按量计费·透明算力<br>可视化工作台与模型市场</p>
+  <aside class="model-focus left" aria-live="off"></aside><aside class="model-focus right" aria-live="off"></aside>
+  <section id="showreel" hidden aria-label="作品展映">
+    <video id="work-video" muted loop playsinline preload="none"></video>
+    <button id="previous-work" class="work-adjacent" type="button" aria-label="上一个作品" hidden><img id="previous-poster" alt=""></button>
+    <button id="next-work" class="work-adjacent" type="button" aria-label="下一个作品" hidden><img id="next-poster" alt=""></button>
+    <div class="work-shade"></div>
+    <div class="work-info"><p id="work-eyebrow"></p><h2 id="work-title"></h2><p id="work-sub"></p></div>
+    <div class="work-controls"><span id="work-counter">01 / 05</span><div id="work-rail" aria-label="选择展映作品"></div></div>
+  </section>
+  <button id="view-toggle" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="m4 8 15-4 2 6-15 4-2-6ZM5 13v7h15v-9M8 7l3 5m3-7 3 5"/></svg><span>作品展映</span></button>
+</main>
+<dialog id="login-dialog" aria-labelledby="login-title">
+  <div class="auth-card">
+    <button class="close" type="button" data-close aria-label="关闭">×</button>
+    <h2 id="login-title">欢迎登录</h2>
+    <p class="auth-subtitle">Infinite Canvas · AIGC 创作工作台</p>
+    <div class="auth-tab">密码登录</div>
+    <form id="login-form">
+      <label for="password">访问密码</label>
+      <div class="password-field"><input id="password" name="password" type="password" autocomplete="current-password" required aria-describedby="auth-hint auth-error"><button id="password-toggle" type="button" aria-label="显示密码" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+      <p id="auth-hint">使用本站管理员提供的访问密码。</p>
+      <p id="auth-error" role="alert"></p>
+      <button id="submit-login" class="submit" type="submit">登录</button>
+    </form>
+    <div class="separator"><span>或者</span></div>
+    <a href="/?entry=canvas" class="guest-entry" data-guest>先逛逛</a>
+    <p class="auth-footnote">你的画布项目保存在当前浏览器中。</p>
+  </div>
+</dialog>
+</body>
+</html>

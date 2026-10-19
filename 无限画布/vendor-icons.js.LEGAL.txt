@@ -1,0 +1,63 @@
+Bundled license information:
+
+lucide/dist/esm/defaultAttributes.mjs:
+lucide/dist/esm/createElement.mjs:
+lucide/dist/esm/icons/arrow-down-to-line.mjs:
+lucide/dist/esm/icons/arrow-right.mjs:
+lucide/dist/esm/icons/arrow-up.mjs:
+lucide/dist/esm/icons/audio-lines.mjs:
+lucide/dist/esm/icons/box.mjs:
+lucide/dist/esm/icons/brain.mjs:
+lucide/dist/esm/icons/check.mjs:
+lucide/dist/esm/icons/chevron-down.mjs:
+lucide/dist/esm/icons/chevron-left.mjs:
+lucide/dist/esm/icons/chevron-right.mjs:
+lucide/dist/esm/icons/circle-question-mark.mjs:
+lucide/dist/esm/icons/circle.mjs:
+lucide/dist/esm/icons/clapperboard.mjs:
+lucide/dist/esm/icons/copy.mjs:
+lucide/dist/esm/icons/download.mjs:
+lucide/dist/esm/icons/ellipsis.mjs:
+lucide/dist/esm/icons/focus.mjs:
+lucide/dist/esm/icons/folder-open.mjs:
+lucide/dist/esm/icons/folder.mjs:
+lucide/dist/esm/icons/folders.mjs:
+lucide/dist/esm/icons/grid-2x2.mjs:
+lucide/dist/esm/icons/hand.mjs:
+lucide/dist/esm/icons/image.mjs:
+lucide/dist/esm/icons/layers.mjs:
+lucide/dist/esm/icons/layout-list.mjs:
+lucide/dist/esm/icons/lightbulb.mjs:
+lucide/dist/esm/icons/link.mjs:
+lucide/dist/esm/icons/map.mjs:
+lucide/dist/esm/icons/maximize-2.mjs:
+lucide/dist/esm/icons/message-circle.mjs:
+lucide/dist/esm/icons/mic.mjs:
+lucide/dist/esm/icons/minus.mjs:
+lucide/dist/esm/icons/mouse-pointer-2.mjs:
+lucide/dist/esm/icons/play.mjs:
+lucide/dist/esm/icons/plug.mjs:
+lucide/dist/esm/icons/plus.mjs:
+lucide/dist/esm/icons/refresh-cw.mjs:
+lucide/dist/esm/icons/rotate-ccw-clock.mjs:
+lucide/dist/esm/icons/rotate-ccw.mjs:
+lucide/dist/esm/icons/search.mjs:
+lucide/dist/esm/icons/settings-2.mjs:
+lucide/dist/esm/icons/share-2.mjs:
+lucide/dist/esm/icons/sliders-horizontal.mjs:
+lucide/dist/esm/icons/sparkles.mjs:
+lucide/dist/esm/icons/square-pen.mjs:
+lucide/dist/esm/icons/square.mjs:
+lucide/dist/esm/icons/text-align-start.mjs:
+lucide/dist/esm/icons/trash.mjs:
+lucide/dist/esm/icons/upload.mjs:
+lucide/dist/esm/icons/video.mjs:
+lucide/dist/esm/icons/workflow.mjs:
+lucide/dist/esm/icons/x.mjs:
+lucide/dist/esm/lucide.mjs:
+  /**
+   * @license lucide v1.59.0 - ISC
+   *
+   * This source code is licensed under the ISC license.
+   * See the LICENSE file in the root directory of this source tree.
+   */

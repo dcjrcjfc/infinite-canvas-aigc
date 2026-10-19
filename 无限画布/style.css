@@ -44,6 +44,7 @@
             transition: opacity 0.2s ease;
         }
         .canvas-empty-state.hidden {
+            visibility: hidden;
             opacity: 0;
             pointer-events: none;
         }
@@ -503,24 +504,29 @@
         }
         .rail-main-btn::after,
         .rail-btn::after {
-            content: attr(data-tip);
+            content: attr(aria-label);
             position: absolute;
-            left: calc(100% + 10px);
+            left: calc(100% + 4px);
             top: 50%;
-            transform: translateY(-50%) translateX(-6px);
+            transform: translateY(-50%) translateX(-3px);
             opacity: 0;
             pointer-events: none;
             white-space: nowrap;
-            background: rgba(16, 17, 22, 0.96);
-            border: 1px solid #343846;
-            color: #dbe0ee;
-            border-radius: 8px;
-            padding: 4px 8px;
+            background: #292929;
+            border: 0;
+            color: #eee;
+            border-radius: 10px;
+            padding: 8px 10px;
             font-size: 12px;
-            transition: 0.16s ease;
+            font-weight: 500;
+            line-height: 16px;
+            z-index: 10;
+            transition: opacity 120ms ease-out, transform 120ms ease-out;
         }
         .rail-main-btn:hover::after,
-        .rail-btn:hover::after {
+        .rail-btn:hover::after,
+        .rail-main-btn:focus-visible::after,
+        .rail-btn:focus-visible::after {
             opacity: 1;
             transform: translateY(-50%) translateX(0);
         }
@@ -810,7 +816,7 @@
             margin: auto 0 0;
             line-height: 1.5;
             color: #f5f7fc;
-            font-size: 30px;
+            font-size: 24px;
             font-weight: 600;
             letter-spacing: 0.2px;
         }
@@ -1047,3 +1053,84 @@
                 font-size: 24px;
             }
         }
+
+/* Workspace controls share the existing dark canvas palette. */
+[hidden] { display: none !important; }
+:focus-visible { outline: 2px solid #a3b7ff; outline-offset: 3px; }
+::selection { background: #5968a6; color: #fff; }
+input, textarea { caret-color: #b7c5ff; }
+* { scrollbar-width: thin; scrollbar-color: #535c70 #171a22; }
+.workspace-loading .project-actions, .workspace-loading .empty-template-row { pointer-events: none; opacity: .5; }
+.project-toolbar { position: fixed; top: 76px; left: 84px; right: 390px; z-index: 1190; display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid #353c4a; border-radius: 12px; background: #151922; flex-wrap: wrap; }
+body.agent-closed .project-toolbar { right: 24px; }
+.project-name-label { display: flex; align-items: center; gap: 8px; color: #b9c3d8; font-size: 12px; }
+#project-name { width: clamp(110px, 13vw, 220px); color: #f1f4fc; background: transparent; border: 0; border-bottom: 1px solid #535c70; padding: 5px 0; font-size: 14px; user-select: text; }
+#project-status { color: #b7c4d9; font-size: 12px; overflow-wrap: anywhere; flex: 1; min-width: 100px; }
+#project-status.is-error, .form-error { color: #ffb8b8; }
+.project-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.project-actions button, dialog button { color: #e4eaf8; background: #252d3e; border: 1px solid #515c73; border-radius: 7px; padding: 7px 10px; cursor: pointer; font: inherit; font-size: 13px; }
+.project-actions button:hover, dialog button:hover { background: #33415b; }
+dialog { width: min(520px, calc(100vw - 32px)); max-height: calc(100dvh - 40px); overflow: auto; background: #171c27; border: 1px solid #535e77; color: #e4eaf8; border-radius: 14px; padding: 24px; line-height: 1.6; box-shadow: 0 24px 70px #0008; }
+dialog::backdrop { background: #05070dbb; }
+.dialog-header { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin-bottom: 20px; }
+.dialog-header h2 { font-size: 20px; margin: 0; }
+dialog label { display: flex; flex-direction: column; gap: 6px; margin-bottom: 18px; font-size: 14px; }
+dialog input, dialog select { width: 100%; background: #10151e; color: #f0f3fb; border: 1px solid #58637b; border-radius: 7px; padding: 9px; font: inherit; user-select: text; }
+dialog .checkbox-row { display: flex; flex-direction: row; align-items: center; }
+.checkbox-row input { width: auto; }
+.form-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.dialog-note { font-size: 13px; color: #b1bfd7; }
+dialog .primary-action { background: #ced8ff; color: #14203e; border-color: #ced8ff; font-weight: 600; }
+.help-steps { padding-left: 22px; font-size: 14px; }
+.help-steps li { margin: 12px 0; }
+.service-models { padding-left: 20px; font-size: 14px; }
+.service-models li { margin: 7px 0; }
+.agent-result { max-height: 24vh; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; color: #c5d0e5; font-size: 13px; line-height: 1.6; }
+.agent-body { min-height: 0; overflow: auto; }
+.agent-foot-meta { flex-wrap: wrap; }
+.agent-status { line-height: 1.4; white-space: normal; }
+.duration-label { color: #b9c4d9; font-size: 12px; }
+.discard-task-btn { display: none; border: 1px solid #58637b; border-radius: 6px; background: #252d3e; color: #e4eaf8; padding: 6px 8px; margin-top: 8px; font-size: 12px; cursor: pointer; }
+.node[data-video-task] .discard-task-btn { display: inline-block; }
+.video-duration { color: #e2e9fb; border: 1px solid #56617b; border-radius: 5px; background: #202735; padding: 4px; }
+.fit-btn, .stop-btn { width: auto; font-size: 12px; padding-inline: 8px; }
+.ref-weight-btn, .ref-weight-value { display: none; }
+.ref-container:empty::before { color: #adb9cf; }
+.ai-input::placeholder { color: #adb9cf; }
+.node-label { color: #b2bdd3; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+@media (max-width: 1200px) {
+    .app-topbar { right: 350px; }
+    .project-toolbar { right: 350px; left: 76px; top: 74px; gap: 8px; }
+    .top-chip { padding-inline: 10px; font-size: 12px; }
+    .brand-name { font-size: 15px; }
+}
+@media (max-width: 900px) {
+    .app-topbar { right: 16px; left: 16px; }
+    .project-toolbar { right: 16px; left: 76px; top: 74px; }
+    .agent-panel { top: 160px; width: min(320px, calc(100vw - 84px)); }
+    .canvas-empty-state { left: calc(50% - 80px); }
+    .empty-template-row { width: min(360px, calc(100vw - 100px)); }
+    .agent-greet { font-size: 22px; }
+    .agent-input { min-height: 80px; font-size: 16px; }
+}
+@media (max-width: 560px) {
+    .top-actions { gap: 5px; }
+    .top-chip:last-child { display: none; }
+    .brand-pill { padding: 7px 9px; }
+    .project-toolbar { top: 70px; left: 70px; right: 12px; }
+    body.agent-closed .project-toolbar { right: 12px; }
+    #project-status { flex-basis: 100%; }
+    .canvas-empty-state { left: 50%; top: 58%; }
+    .empty-headline { flex-wrap: wrap; justify-content: center; }
+    .empty-text { font-size: 16px; }
+    .canvas-controls { max-width: calc(100vw - 20px); gap: 4px; padding: 6px; }
+    .zoom-slider { width: 64px; }
+    .zoom-label { min-width: 40px; }
+    .agent-panel { top: 205px; bottom: 76px; }
+    .agent-body { gap: 10px; }
+    .agent-actions { gap: 4px; }
+    .agent-chip { padding: 6px; min-height: 44px; }
+    dialog { padding: 18px; }
+    dialog input, dialog select { font-size: 16px; }
+}

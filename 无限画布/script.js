@@ -1,19 +1,26 @@
 const IMAGE_MODEL_OPTIONS = [
-    { id: "gemini-3.1-flash-image-preview-4k", label: "NanoBanana", icon: "🍌" },
-    { id: "gpt-image-2", label: "gpt-image-2", icon: "🌀" },
-    { id: "midjourney", label: "Midjourney", icon: "🎨" },
-    { id: "jimeng-ai", label: "即梦AI", icon: "✨" }
+    { id: "gemini-3.1-flash-image-preview-4k", label: "NanoBanana", icon: "" },
+    { id: "gpt-image-2", label: "gpt-image-2", icon: "" },
+    { id: "midjourney", label: "Midjourney", icon: "" },
+    { id: "jimeng-ai", label: "即梦AI", icon: "" }
 ];
 const VIDEO_MODEL_OPTIONS = [
-    { id: "seedance", label: "Seedance", icon: "🎬" },
-    { id: "keling", label: "可灵", icon: "📽️" }
+    { id: "seedance", label: "Seedance", icon: "" },
+    { id: "keling", label: "可灵", icon: "" }
+];
+const TEXT_MODEL_OPTIONS = [
+    { id: 'gemini', label: 'Gemini', icon: 'G' },
+    { id: 'chatgpt', label: 'ChatGPT', icon: 'C' },
+    { id: 'deepseek', label: 'DeepSeek', icon: 'D' }
 ];
 const NODE_MODEL_OPTIONS = {
-    text: IMAGE_MODEL_OPTIONS,
+    text: TEXT_MODEL_OPTIONS,
     image: IMAGE_MODEL_OPTIONS,
-    video: VIDEO_MODEL_OPTIONS
+    video: VIDEO_MODEL_OPTIONS,
+    audio: [{ id: 'audio-speech', label: '语音合成', icon: '' }],
+    scene: []
 };
-const MODEL_OPTIONS = [...IMAGE_MODEL_OPTIONS, ...VIDEO_MODEL_OPTIONS];
+const MODEL_OPTIONS = [...IMAGE_MODEL_OPTIONS, ...VIDEO_MODEL_OPTIONS, ...TEXT_MODEL_OPTIONS];
 const AGENT_LLM_LABELS = {
     gemini: "Gemini",
     chatgpt: "ChatGPT",
@@ -24,9 +31,7 @@ const SUPPORTS_CSS_ZOOM = typeof CSS !== "undefined" && typeof CSS.supports === 
 const HISTORY_STORAGE_KEY = "infinite_canvas_history_v1";
 const MAX_HISTORY_ITEMS = 60;
 const MAX_COMMAND_STACK = 40;
-const API_MAX_RETRIES = 2;
-const API_RETRY_DELAY_MS = 700;
-const API_RETRYABLE_STATUS = new Set([408, 409, 425, 429, 500, 502, 503, 504]);
+const isCanvasShortcutControl = target => !!target?.closest?.('input,textarea,select,button,a[href],summary,[contenteditable],[role="button"],[role="menu"],[role="menuitem"],[role="menuitemcheckbox"],[role="menuitemradio"],[role="listbox"],[role="option"],[role="tab"],[role="checkbox"],[role="radio"],[role="switch"],[role="slider"],[role="combobox"]');
 const HISTORY_TYPE_LABELS = {
     node: "节点",
     link: "连线",
@@ -37,9 +42,11 @@ const HISTORY_TYPE_LABELS = {
     misc: "其他"
 };
 const NODE_TYPE_META = {
-    text: { label: "文本节点", icon: "📝" },
-    image: { label: "图片节点", icon: "🖼️" },
-    video: { label: "视频节点", icon: "🎬" }
+    text: { label: "文本节点", icon: "" },
+    image: { label: "图片节点", icon: "" },
+    video: { label: "视频", icon: "" },
+    audio: { label: '音频', icon: '' },
+    scene: { label: '3D 片场', icon: '' }
 };
 const TEMPLATE_PRESETS = {
     character: {
@@ -178,7 +185,7 @@ function getSelectedAgentLLMLabel() {
 }
 
 function getNodeMeta(type) {
-    return NODE_TYPE_META[type] || { label: "节点", icon: "◻" };
+    return NODE_TYPE_META[type] || { label: "节点", icon: "" };
 }
 
 const State = {
@@ -213,31 +220,40 @@ const Engine = {
     },
     getCurvePath(x1, y1, x2, y2) { const d = Math.abs(x2 - x1) * 0.4; return `M ${x1} ${y1} C ${x1 + d} ${y1}, ${x2 - d} ${y2}, ${x2} ${y2}`; },
     getConnPos(el) {
-        const r = el.getBoundingClientRect(), cr = document.getElementById('canvas').getBoundingClientRect();
-        return { x: (r.left + r.width/2 - cr.left) / State.canvas.scale, y: (r.top + r.height/2 - cr.top) / State.canvas.scale };
+        const node = el.closest('.node');
+        let offset = UI.connectorGeometry.get(el);
+        if (!offset) {
+            const r = el.getBoundingClientRect(), nr = node.getBoundingClientRect(), scale = State.canvas.scale;
+            offset = { x: (r.left + r.width / 2 - nr.left) / scale, y: (r.top + r.height / 2 - nr.top) / scale };
+            UI.connectorGeometry.set(el, offset);
+        }
+        return { x: (parseFloat(node.style.left) || 0) + offset.x, y: (parseFloat(node.style.top) || 0) + offset.y };
     }
 };
 
 const UI = {
+    connectorGeometry: new WeakMap(),
+    invalidateNodeGeometry(node) {
+        node.querySelectorAll('.connector').forEach((el) => this.connectorGeometry.delete(el));
+    },
     updateCanvas() {
-        const tx = Engine.snapToDevicePixel(State.canvas.x);
-        const ty = Engine.snapToDevicePixel(State.canvas.y);
+        window.CanvasMotion?.reset();
         const s = Engine.roundScale(State.canvas.scale);
+        // Keep the existing saved camera coordinate convention, but move/scale
+        // the scene as one compositor layer. CSS zoom relaid out every node.
+        const divisor = SUPPORTS_CSS_ZOOM ? s : 1;
+        const tx = Engine.snapToDevicePixel(State.canvas.x * divisor);
+        const ty = Engine.snapToDevicePixel(State.canvas.y * divisor);
         const canvas = document.getElementById('canvas');
-        if (SUPPORTS_CSS_ZOOM) {
-            // Native zoom usually keeps text/vector edges crisper than transform scale.
-            canvas.style.transform = `translate(${tx}px, ${ty}px)`;
-            canvas.style.zoom = String(s);
-        } else {
-            canvas.style.zoom = "";
-            canvas.style.transform = `translate(${tx}px, ${ty}px) scale(${s})`;
-        }
+        canvas.style.zoom = '';
+        canvas.style.transform = `translate3d(${tx}px, ${ty}px, 0) scale(${s})`;
     },
     updateZoomUI() {
         const slider = document.getElementById('zoom-slider');
         const label = document.getElementById('zoom-label');
         if (!slider || !label) return;
         const value = Math.round(State.canvas.scale * 100);
+        if (label.textContent === `${value}%`) return;
         slider.value = String(value);
         label.textContent = `${value}%`;
     },
@@ -248,48 +264,52 @@ const UI = {
         return `${meta.label} ${State.nodeCounters[type]}`;
     },
     createNode(type, pos, url = null, options = {}) {
+        if (State.nodes.length >= ProjectStore.MAX_NODES) throw new Error(`画布最多支持 ${ProjectStore.MAX_NODES} 个节点，请新建画布继续创作`);
         const withPrompt = options.withPrompt !== false;
         const nodeMeta = getNodeMeta(type);
         const modelOptions = getModelOptionsByNodeType(type);
+        const preferred = window.Workspace?.config.models.find((item) => item.type === (type === 'text' ? 'text' : type) && item.available)?.id;
         const node = document.createElement('div');
         node.className = 'node';
         node.style.left = pos.x + 'px'; node.style.top = pos.y + 'px';
         node.dataset.nodeId = `node_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
-        node.dataset.model = normalizeModelIdForNodeType(options.modelId || modelOptions[0]?.id, type);
+        node.dataset.model = normalizeModelIdForNodeType(options.modelId || preferred || modelOptions[0]?.id, type);
         node.dataset.ratio = "1:1";
         node.dataset.nodeType = type;
         node.dataset.nodeName = options.nodeName || this.getNextNodeName(type);
         node.dataset.nodeStatus = options.status || (withPrompt ? '生成节点' : '素材节点');
         const modelMeta = getModelMeta(node.dataset.model, type);
 
-        const ratios = ["1:1","16:9","9:16","4:3","3:4","2:3","3:2","7:4","4:7","21:9"];
+        const ratios = type === 'video' ? ['16:9', '9:16'] : ['1:1','16:9','9:16','4:3','3:4','2:3','3:2','7:4','4:7','21:9'];
+        node.dataset.ratio = ratios[0];
         const ratioGridHTML = ratios.map(r => {
             const ratioClass = `ratio-shape-${r.replace(':', '-')}`;
-            return `<div class="ratio-item ${r==='1:1'?'active':''}" data-ratio="${r}"><div class="ratio-visual-box"><div class="ratio-shape ${ratioClass}"></div></div><div class="ratio-label">${r}</div></div>`;
+            return `<div class="ratio-item ${r===node.dataset.ratio?'active':''}" data-ratio="${r}"><div class="ratio-visual-box"><div class="ratio-shape ${ratioClass}"></div></div><div class="ratio-label">${r}</div></div>`;
         }).join('');
         const modelListHTML = modelOptions.map((model) => {
             const activeClass = model.id === node.dataset.model ? "active" : "";
-            return `<button class="model-item ${activeClass}" data-model-id="${model.id}" type="button"><span class="model-item-icon">${model.icon}</span><span class="model-item-label">${model.label}</span></button>`;
+            const capability = window.Workspace?.config.models.find((item) => item.id === model.id);
+            return `<button class="model-item ${activeClass}" data-model-id="${model.id}" type="button"><span class="model-item-icon">${model.icon}</span><span class="model-item-label">${model.label}${capability && !capability.available ? ' · 未配置' : ''}</span></button>`;
         }).join('');
 
-        let mediaHTML = `<span class="media-placeholder">${type==='video'?'🎬':'🖼️'}</span>`;
-        if (url) mediaHTML = type==='video' ? `<video src="${url}" autoplay loop muted></video>` : `<img src="${url}">`;
+        let mediaHTML = '<span class="media-placeholder"></span>';
+        if (url) mediaHTML = type==='audio' ? `<audio src="${Interaction.escapeHtml(url)}" controls></audio>` : type==='video' ? `<video src="${Interaction.escapeHtml(url)}" controls muted></video>` : `<img src="${Interaction.escapeHtml(url)}" alt="节点图片">`;
         const nodeHeaderHTML = `
             <div class="node-head">
                 <div class="node-type-meta"><span>${nodeMeta.icon}</span><span>${nodeMeta.label}</span></div>
-                <span class="node-status-tag">${node.dataset.nodeStatus}</span>
+                <span class="node-status-tag">${Interaction.escapeHtml(node.dataset.nodeStatus)}</span>
             </div>
-            <div class="node-label" title="双击重命名">${node.dataset.nodeName}</div>
+            <div class="node-label" title="双击重命名">${Interaction.escapeHtml(node.dataset.nodeName)}</div>
         `;
 
         // withPrompt=false: 只保留图片框 + 左右连接点（用于上传素材节点）
         node.innerHTML = withPrompt ? `
             ${nodeHeaderHTML}
             <div class="box-wrapper">
-                ${type !== 'text' ? `<div class="node-upload-pill">↑ 上传</div>` : ''}
-                <div class="connector conn-left">＋</div>
+                ${type !== 'text' ? `<button type="button" class="node-upload-pill">上传</button>` : ''}
+                <button type="button" class="connector conn-left" aria-label="左侧连接点">＋</button>
                 <div class="node-box"><div class="media-container">${type==='text'?`<textarea class="ai-input text-node-input" placeholder="开始创作..."></textarea>`:mediaHTML}</div></div>
-                <div class="connector conn-right">＋</div>
+                <button type="button" class="connector conn-right" aria-label="右侧连接点">＋</button>
             </div>
             <div class="ai-panel">
                 <div class="ref-toolbar">
@@ -297,9 +317,12 @@ const UI = {
                     <button class="ref-add-btn" title="添加参考图">＋</button>
                 </div>
                 <textarea class="ai-input" placeholder="输入指令..."></textarea>
+                ${type === 'video' ? '<label class="duration-label">时长 <select class="video-duration" aria-label="视频时长"><option value="4">4 秒</option><option value="8">8 秒</option><option value="12">12 秒</option></select></label>' : ''}
+                ${type === 'audio' ? '<div class="audio-options"><label>音色 <select class="audio-voice" aria-label="音色"><option>alloy</option><option>ash</option><option>coral</option><option>echo</option><option>fable</option><option>nova</option><option>onyx</option><option>sage</option><option>shimmer</option></select></label><label>语速 <input class="audio-speed" aria-label="语速" type="number" min="0.25" max="4" step="0.05" value="1"></label></div>' : ''}
+                ${type === 'video' ? '<button type="button" class="discard-task-btn" title="只清除本站查询记录，不取消上游任务">清除待查询任务</button>' : ''}
                 <div class="ai-footer">
-                    <div class="footer-group"><div class="footer-btn model-switch">${modelMeta.icon} ${modelMeta.label}</div><div class="footer-btn ratio-toggle">⬜ ${node.dataset.ratio}</div></div>
-                    <div class="send-btn">↑</div>
+                    <div class="footer-group"><button type="button" class="footer-btn model-switch">${modelMeta.icon} ${modelMeta.label}</button><button type="button" class="footer-btn ratio-toggle">比例 ${node.dataset.ratio}</button></div>
+                    <button class="send-btn" type="button" aria-label="生成内容">↑</button>
                 </div>
                 <div class="model-popover">${modelListHTML}</div>
                 <div class="ratio-popover"><div class="ratio-title">输出比例</div><div class="ratio-grid">${ratioGridHTML}</div></div>
@@ -307,20 +330,32 @@ const UI = {
         ` : `
             ${nodeHeaderHTML}
             <div class="box-wrapper">
-                ${type !== 'text' ? `<div class="node-upload-pill">↑ 替换</div>` : ''}
-                <div class="connector conn-left">＋</div>
+                ${type !== 'text' ? `<button type="button" class="node-upload-pill">替换</button>` : ''}
+                <button type="button" class="connector conn-left" aria-label="左侧连接点">＋</button>
                 <div class="node-box"><div class="media-container">${type==='text'?`<textarea class="ai-input text-node-input" placeholder="开始创作..."></textarea>`:mediaHTML}</div></div>
-                <div class="connector conn-right">＋</div>
+                <button type="button" class="connector conn-right" aria-label="右侧连接点">＋</button>
             </div>
         `;
         document.getElementById('canvas').appendChild(node);
+        if (window.ResizeObserver) {
+            this.nodeResizeObserver ||= new ResizeObserver((entries) => {
+                for (const entry of entries) this.invalidateNodeGeometry(entry.target.closest('.node'));
+                Interaction.requestRender({ lines: true });
+            });
+            this.nodeResizeObserver.observe(node.querySelector('.node-box'));
+        }
+        window.Creative?.decorateNode(node);
         return node;
     },
-    updateLines() {
-        State.links.forEach(l => {
+    updateLines(nodes = null) {
+        // Moving one node affects only its incident edges. Camera movement
+        // moves the SVG with the scene and never changes world-space paths.
+        const links = nodes?.size ? State.links.filter((l) => nodes.has(l.fromEl.closest('.node')) || nodes.has(l.toEl.closest('.node'))) : State.links;
+        const paths = links.map(l => {
             const p1 = Engine.getConnPos(l.fromEl), p2 = Engine.getConnPos(l.toEl);
-            l.pathEl.setAttribute('d', Engine.getCurvePath(p1.x, p1.y, p2.x, p2.y));
+            return [l.pathEl, Engine.getCurvePath(p1.x, p1.y, p2.x, p2.y)];
         });
+        paths.forEach(([path, d]) => { if (path.getAttribute('d') !== d) path.setAttribute('d', d); });
     }
 };
 
@@ -339,27 +374,64 @@ const Interaction = {
     dirtyCanvas: false,
     dirtyLines: false,
     dirtyTempLine: false,
-    motionEnabled: !(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches),
+    dirtyMarquee: false,
+    fullLineRender: false,
+    motionEnabled: false,
     connectorPressTimer: null,
     connectorPressEl: null,
     connectorLongPressTriggered: false,
     isMarqueeSelecting: false,
     marqueeStart: null,
+    movedNodes: new Set(),
+    persistTimer: null,
+    queueSave() {
+        if (window.Workspace?.ready) window.Workspace.dirty = true;
+        clearTimeout(this.persistTimer);
+        this.persistTimer = setTimeout(() => {
+            this.persistTimer = null;
+            if (this.isPanning || this.dragNode || this.dragNodes.length || this.touchActive || (State.linking.active && window.CanvasNavigation?.gesture)) return this.queueSave();
+            window.Workspace?.scheduleSave();
+        }, 250);
+    },
+    setManipulating(active) {
+        if (active) window.CanvasMotion?.reset();
+        document.body.classList.toggle('canvas-manipulating', active);
+    },
+    moveNode(node, dx, dy) {
+        node.x += dx; node.y += dy;
+        this.movedNodes.add(node);
+    },
+    flushNodePositions() {
+        const nodes = new Set();
+        for (const node of this.movedNodes) {
+            node.el.style.left = `${node.x}px`; node.el.style.top = `${node.y}px`; nodes.add(node.el);
+        }
+        this.movedNodes.clear();
+        return nodes;
+    },
 
-    requestRender({ canvas = false, lines = false, tempLine = false } = {}) {
+    requestRender({ canvas = false, lines = false, tempLine = false, nodePositions = false, marquee = false } = {}) {
+        if (canvas || lines) this.queueSave();
+        if (lines && !nodePositions) this.fullLineRender = true;
         this.dirtyCanvas = this.dirtyCanvas || canvas;
         this.dirtyLines = this.dirtyLines || lines;
         this.dirtyTempLine = this.dirtyTempLine || tempLine;
+        this.dirtyMarquee = this.dirtyMarquee || marquee;
         if (this.renderRAF) return;
-        this.renderRAF = requestAnimationFrame(() => {
+        this.renderRAF = requestAnimationFrame((time) => {
+            this.beforeCanvasFrame?.(time);
+            const layout = this.dirtyCanvas || this.dirtyLines || this.dirtyMarquee || window.Creative?.pendingLayout;
+            if (this.dirtyMarquee) this.updateMarqueeSelection(this.mouseScreen.x, this.mouseScreen.y);
+            const moved = this.flushNodePositions();
             if (this.dirtyCanvas) UI.updateCanvas();
             if (this.dirtyCanvas) UI.updateZoomUI();
-            if (this.dirtyLines) UI.updateLines();
+            if (this.dirtyLines) UI.updateLines(!this.fullLineRender && moved.size ? moved : null);
             if (this.dirtyTempLine) {
                 if (State.linking.active && State.linking.startEl) {
                     const mouse = Engine.screenToCanvas(this.mouseScreen.x, this.mouseScreen.y);
                     const start = Engine.getConnPos(State.linking.startEl);
-                    document.getElementById('temp-line').setAttribute('d', Engine.getCurvePath(start.x, start.y, mouse.x, mouse.y));
+                    const left = State.linking.startEl.classList.contains('conn-left');
+                    document.getElementById('temp-line').setAttribute('d', left ? Engine.getCurvePath(mouse.x, mouse.y, start.x, start.y) : Engine.getCurvePath(start.x, start.y, mouse.x, mouse.y));
                 } else {
                     document.getElementById('temp-line').setAttribute('d', '');
                 }
@@ -367,7 +439,11 @@ const Interaction = {
             this.dirtyCanvas = false;
             this.dirtyLines = false;
             this.dirtyTempLine = false;
+            this.dirtyMarquee = false;
+            this.fullLineRender = false;
             this.renderRAF = null;
+            if (layout) window.Creative?.flushLayout();
+            this.afterCanvasFrame?.(time);
         });
     },
 
@@ -389,8 +465,8 @@ const Interaction = {
                 this.stopInertia();
                 return;
             }
-            State.canvas.x += this.panVelocity.x;
-            State.canvas.y += this.panVelocity.y;
+            State.canvas.x += this.panVelocity.x / (SUPPORTS_CSS_ZOOM ? State.canvas.scale : 1);
+            State.canvas.y += this.panVelocity.y / (SUPPORTS_CSS_ZOOM ? State.canvas.scale : 1);
             this.requestRender({ canvas: true, lines: true, tempLine: true });
             this.inertiaRAF = requestAnimationFrame(tick);
         };
@@ -419,7 +495,7 @@ const Interaction = {
             State.canvas.x = clientX - worldX * newScale;
             State.canvas.y = clientY - worldY * newScale;
         }
-        this.requestRender({ canvas: true, lines: true, tempLine: true });
+        this.requestRender({ canvas: true, tempLine: true });
     },
 
     setScaleByPercent(percent) {
@@ -446,14 +522,14 @@ const Interaction = {
             State.canvas.x = cx - worldX * nextScale;
             State.canvas.y = cy - worldY * nextScale;
         }
-        this.requestRender({ canvas: true, lines: true, tempLine: true });
+        this.requestRender({ canvas: true, tempLine: true });
     },
 
     resetView() {
         State.canvas.x = -4500;
         State.canvas.y = -4500;
         State.canvas.scale = 1;
-        this.requestRender({ canvas: true, lines: true, tempLine: true });
+        this.requestRender({ canvas: true, tempLine: true });
     },
 
     focusCanvasCenter() {
@@ -461,9 +537,9 @@ const Interaction = {
         const cx = viewport.clientWidth / 2;
         const cy = viewport.clientHeight / 2;
         const worldCenter = { x: 5000, y: 5000 };
-        State.canvas.x = cx - worldCenter.x * State.canvas.scale;
-        State.canvas.y = cy - worldCenter.y * State.canvas.scale;
-        this.requestRender({ canvas: true, lines: true, tempLine: true });
+        State.canvas.x = SUPPORTS_CSS_ZOOM ? cx / State.canvas.scale - worldCenter.x : cx - worldCenter.x * State.canvas.scale;
+        State.canvas.y = SUPPORTS_CSS_ZOOM ? cy / State.canvas.scale - worldCenter.y : cy - worldCenter.y * State.canvas.scale;
+        this.requestRender({ canvas: true, tempLine: true });
     },
 
     setAgentPanelOpen(isOpen) {
@@ -476,6 +552,7 @@ const Interaction = {
         if (railBtn) railBtn.classList.toggle('active', isOpen);
         document.body.classList.toggle('agent-open', isOpen);
         document.body.classList.toggle('agent-closed', !isOpen);
+        window.Creative?.layout();
     },
 
     toggleAgentPanel() {
@@ -498,10 +575,13 @@ const Interaction = {
             this.toast('模板不存在或暂不可用', 'warn');
             return;
         }
+        if (State.nodes.length + preset.nodes.length > ProjectStore.MAX_NODES || State.links.length + preset.links.length > ProjectStore.MAX_LINKS) {
+            this.toast('模板将超过画布容量，请新建画布或减少节点', 'warn'); return;
+        }
         const now = Date.now();
         if (now < State.templateCreateLockUntil) return;
         State.templateCreateLockUntil = now + 500;
-        if (State.nodes.length > 0) {
+        if (State.nodes.length > 0 && !window.Workspace?.allowTemplateAppend) {
             this.toast('当前画布已有内容，已阻止重复批量创建模板', 'warn', 2200);
             return;
         }
@@ -529,7 +609,7 @@ const Interaction = {
                     if (config.status) this.updateNodeStatus(el, config.status);
                     if (config.ratio && el.querySelector('.ratio-toggle')) {
                         el.dataset.ratio = config.ratio;
-                        el.querySelector('.ratio-toggle').innerText = `⬜ ${config.ratio}`;
+                        el.querySelector('.ratio-toggle').innerText = `比例 ${config.ratio}`;
                         el.querySelectorAll('.ratio-item').forEach((item) => {
                             item.classList.toggle('active', item.dataset.ratio === config.ratio);
                         });
@@ -641,63 +721,6 @@ const Interaction = {
         this._agentStatusTimer = setTimeout(() => this.setAgentStatus('已就绪', 'info'), delay);
     },
 
-    classifyApiError(status, payload, fallback = '') {
-        const raw = typeof payload === 'string'
-            ? payload
-            : (payload?.error?.message || payload?.error || payload?.message || fallback || '');
-        const suffix = raw ? `（${String(raw).slice(0, 80)}）` : '';
-        if (status === 401 || status === 403) {
-            return {
-                code: 'auth',
-                message: `鉴权失败，请检查代理环境变量或模型权限${suffix}`
-            };
-        }
-        if (status === 429) {
-            return {
-                code: 'rate',
-                message: `请求过于频繁，已触发限流，请稍后重试${suffix}`
-            };
-        }
-        if (status >= 500) {
-            return {
-                code: 'server',
-                message: `服务暂时不可用（${status}），请稍后重试${suffix}`
-            };
-        }
-        if (status >= 400) {
-            return {
-                code: 'request',
-                message: `请求失败（${status}），请检查输入内容或模型配置${suffix}`
-            };
-        }
-        return {
-            code: 'network',
-            message: '网络异常，请确认代理服务已启动（http://127.0.0.1:8787）后重试'
-        };
-    },
-
-    async fetchWithRetry(requestFactory, options = {}) {
-        const maxRetries = Number.isFinite(options.maxRetries) ? options.maxRetries : API_MAX_RETRIES;
-        const retryDelayMs = Number.isFinite(options.retryDelayMs) ? options.retryDelayMs : API_RETRY_DELAY_MS;
-        let retryCount = 0;
-        while (true) {
-            try {
-                const response = await requestFactory();
-                if (response.ok || !API_RETRYABLE_STATUS.has(response.status) || retryCount >= maxRetries) {
-                    return { response, retryCount };
-                }
-                retryCount += 1;
-                if (typeof options.onRetry === 'function') options.onRetry({ retryCount, status: response.status });
-                await this.sleep(retryDelayMs * retryCount);
-            } catch (error) {
-                if (retryCount >= maxRetries) throw error;
-                retryCount += 1;
-                if (typeof options.onRetry === 'function') options.onRetry({ retryCount, error });
-                await this.sleep(retryDelayMs * retryCount);
-            }
-        }
-    },
-
     getSelectedNodeElements() {
         if (State.multiSelection.length) return [...State.multiSelection];
         if (State.selection.type === 'node' && State.selection.item) return [State.selection.item];
@@ -743,6 +766,7 @@ const Interaction = {
         if (label) {
             label.textContent = nextName;
             label.classList.remove('editing');
+            window.Creative?.syncNodeHeading(nodeEl);
         }
         if (syncReferenceSource) this.refreshReferenceSourceMeta(nodeEl);
     },
@@ -784,12 +808,17 @@ const Interaction = {
             }
         };
         input.onkeydown = (e) => {
+            if (e.isComposing) return;
             if (e.key === 'Enter') {
                 e.preventDefault();
+                e.stopPropagation();
                 commit(true);
+                label.focus({ preventScroll: true });
             } else if (e.key === 'Escape') {
                 e.preventDefault();
+                e.stopPropagation();
                 commit(false);
+                label.focus({ preventScroll: true });
             }
         };
         input.onblur = () => commit(true);
@@ -826,6 +855,7 @@ const Interaction = {
         if (nodeId) nodeEl.dataset.nodeId = nodeId;
         nodeEl.dataset.model = normalizeModelIdForNodeType(snapshot.model, snapshot.type);
         nodeEl.dataset.ratio = snapshot.ratio || '1:1';
+        if (snapshot.groupId) { nodeEl.dataset.groupId = snapshot.groupId; nodeEl.dataset.groupName = snapshot.groupName || '分组'; }
         this.updateNodeStatus(nodeEl, snapshot.status || nodeEl.dataset.nodeStatus);
         this.applyNodeName(nodeEl, snapshot.name || snapshot.nodeName || nodeEl.dataset.nodeName);
 
@@ -838,13 +868,25 @@ const Interaction = {
             item.classList.toggle('active', item.dataset.modelId === nodeEl.dataset.model);
         });
         const ratioBtn = nodeEl.querySelector('.ratio-toggle');
-        if (ratioBtn) ratioBtn.innerText = `⬜ ${nodeEl.dataset.ratio}`;
+        if (ratioBtn) ratioBtn.innerText = `比例 ${nodeEl.dataset.ratio}`;
 
         const promptInput = nodeEl.querySelector('.ai-panel .ai-input');
         if (promptInput) promptInput.value = snapshot.prompt || '';
         const textInput = nodeEl.querySelector('.text-node-input');
         if (textInput) textInput.value = snapshot.textValue || '';
 
+        if (snapshot.videoTask) nodeEl.dataset.videoTask = snapshot.videoTask;
+        nodeEl.dataset.inputMode = snapshot.inputMode || 'first-frame';
+        nodeEl.dataset.resolution = snapshot.resolution || '';
+        if (snapshot.sceneSpec) nodeEl.dataset.sceneSpec = JSON.stringify(snapshot.sceneSpec);
+        if (nodeEl.querySelector('.audio-voice')) nodeEl.querySelector('.audio-voice').value = snapshot.voice || 'alloy';
+        if (nodeEl.querySelector('.audio-speed')) nodeEl.querySelector('.audio-speed').value = snapshot.speed || 1;
+        const durationSelect = nodeEl.querySelector('.video-duration');
+        if (durationSelect) {
+            const value = snapshot.duration || '4';
+            if (![...durationSelect.options].some((option) => option.value === value)) { const option = document.createElement('option'); option.value = value; option.textContent = `${value} 秒`; durationSelect.appendChild(option); }
+            durationSelect.value = value;
+        }
         const img = nodeEl.querySelector('.media-container img');
         if (img) {
             img.style.filter = snapshot.imageFilter || '';
@@ -868,6 +910,9 @@ const Interaction = {
             this.toast('剪贴板为空');
             return;
         }
+        if (State.nodes.length + State.clipboard.nodes.length > ProjectStore.MAX_NODES || State.links.length + State.clipboard.links.length > ProjectStore.MAX_LINKS) {
+            this.toast(`粘贴后将超过 ${ProjectStore.MAX_NODES} 个节点或 ${ProjectStore.MAX_LINKS} 条连线，已保留原画布`, 'warn'); return;
+        }
         const selectedAfterPaste = [];
         const shift = 48 + (State.pasteSerial % 4) * 18;
         State.pasteSerial += 1;
@@ -877,8 +922,10 @@ const Interaction = {
                 this.clearMultiSelection();
                 this.deselect();
                 const idMap = new Map();
+                const groupMap = new Map();
                 State.clipboard.nodes.forEach((snapshot) => {
-                    const nodeEl = this.instantiateNodeFromSnapshot(snapshot, {
+                    if (snapshot.groupId && !groupMap.has(snapshot.groupId)) groupMap.set(snapshot.groupId, `group_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`);
+                    const nodeEl = this.instantiateNodeFromSnapshot({ ...snapshot, groupId: groupMap.get(snapshot.groupId) }, {
                         preserveId: false,
                         offsetX: shift,
                         offsetY: shift,
@@ -959,10 +1006,7 @@ const Interaction = {
     },
 
     saveHistory() {
-        try {
-            const generateOnly = State.history.filter((item) => item.type === 'generate').slice(0, MAX_HISTORY_ITEMS);
-            localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(generateOnly));
-        } catch {}
+        window.Workspace?.scheduleSave();
     },
 
     pushHistory(type, text, meta = {}) {
@@ -1055,15 +1099,17 @@ const Interaction = {
             const nodeEl = node.el;
             const imageEl = nodeEl.querySelector('.media-container img');
             const videoEl = nodeEl.querySelector('.media-container video');
+            const audioEl = nodeEl.querySelector('.media-container audio');
             const promptInput = nodeEl.querySelector('.ai-panel .ai-input');
             const textInput = nodeEl.querySelector('.text-node-input');
-            const media = imageEl ? { kind: 'img', src: imageEl.src } : (videoEl ? { kind: 'video', src: videoEl.src } : { kind: 'none', src: null });
+            const media = imageEl ? { kind: 'img', src: imageEl.src } : (videoEl ? { kind: 'video', src: videoEl.src } : audioEl ? { kind: 'audio', src: audioEl.src } : { kind: 'none', src: null });
             return {
                 id: nodeEl.dataset.nodeId,
                 type: node.type,
                 x: node.x,
                 y: node.y,
                 name: nodeEl.dataset.nodeName || nodeEl.querySelector('.node-label')?.textContent?.trim() || '',
+                groupId: nodeEl.dataset.groupId || '', groupName: nodeEl.dataset.groupName || '',
                 status: nodeEl.dataset.nodeStatus || '',
                 withPrompt: !!nodeEl.querySelector('.ai-panel'),
                 model: nodeEl.dataset.model || getDefaultModelByNodeType(node.type)?.id,
@@ -1071,6 +1117,12 @@ const Interaction = {
                 prompt: promptInput ? promptInput.value : '',
                 textValue: textInput ? textInput.value : '',
                 media,
+                sceneSpec: nodeEl.dataset.sceneSpec ? JSON.parse(nodeEl.dataset.sceneSpec) : null,
+                voice: nodeEl.querySelector('.audio-voice')?.value || 'alloy',
+                speed: Number(nodeEl.querySelector('.audio-speed')?.value || 1),
+                videoTask: nodeEl.dataset.videoTask || '',
+                duration: nodeEl.querySelector('.video-duration')?.value || '4',
+                inputMode: nodeEl.dataset.inputMode || 'first-frame', resolution: nodeEl.dataset.resolution || '',
                 imageFilter: imageEl?.style.filter || '',
                 rotateDeg: imageEl?.dataset.rotateDeg || '0',
                 flipX: imageEl?.dataset.flipX || '0',
@@ -1087,12 +1139,18 @@ const Interaction = {
         return {
             canvas: { ...State.canvas },
             nodes,
-            links
+            links,
+            timeline: (State.timeline || []).map((clip) => ({ ...clip })),
+            conversations: JSON.parse(JSON.stringify(State.conversations || [])),
+            view: { ...(State.view || {}) }
         };
     },
 
     restoreScene(scene) {
         if (!scene || !Array.isArray(scene.nodes) || !Array.isArray(scene.links)) return;
+        this.movedNodes.clear();
+        UI.nodeResizeObserver?.disconnect();
+        window.Workspace?.cancelAll();
         this.closeNodeMenu();
         this.closeAllNodePopovers();
         this.stopLinking();
@@ -1102,6 +1160,9 @@ const Interaction = {
         State.nodes.forEach((node) => node.el.remove());
         State.links = [];
         State.nodes = [];
+        State.timeline = (scene.timeline || []).map((clip) => ({ ...clip }));
+        State.conversations = JSON.parse(JSON.stringify(scene.conversations || []));
+        State.view = { ...(scene.view || {}) };
         this.clearMultiSelection();
 
         const nodeMap = new Map();
@@ -1123,14 +1184,18 @@ const Interaction = {
 
         State.canvas.x = Number(scene.canvas?.x ?? -4500);
         State.canvas.y = Number(scene.canvas?.y ?? -4500);
-        State.canvas.scale = Number(scene.canvas?.scale ?? 1);
+        State.canvas.scale = Engine.clamp(Number(scene.canvas?.scale ?? 1), this.minScale, this.maxScale);
+        Object.keys(State.nodeCounters).forEach((type) => { State.nodeCounters[type] = State.nodes.filter((node) => node.type === type).length; });
+        this.refreshAllReferences();
         this.requestRender({ canvas: true, lines: true, tempLine: true });
         this.syncCanvasEmptyState();
         this.updateUndoRedoUI();
+        window.Creative?.onRestore();
     },
 
-    pushCommand(beforeScene, afterScene) {
-        State.undoStack.push({ before: beforeScene, after: afterScene });
+    pushCommand(beforeScene, afterScene, workspace = {}) {
+        State.undoStack.push({ before: beforeScene, after: afterScene, ...workspace });
+        window.Workspace?.scheduleSave();
         if (State.undoStack.length > MAX_COMMAND_STACK) State.undoStack.shift();
         State.redoStack = [];
         this.updateUndoRedoUI();
@@ -1138,7 +1203,11 @@ const Interaction = {
 
     runSceneCommand({ historyType = 'misc', historyText = '', nodeId = null } = {}, mutator) {
         const beforeScene = this.captureScene();
-        mutator();
+        try { mutator(); }
+        catch (error) {
+            if (JSON.stringify(beforeScene) !== JSON.stringify(this.captureScene())) this.restoreScene(beforeScene);
+            this.toast(error.message, 'error', 5000); return false;
+        }
         const afterScene = this.captureScene();
         if (JSON.stringify(beforeScene) === JSON.stringify(afterScene)) return false;
         this.pushCommand(beforeScene, afterScene);
@@ -1154,7 +1223,9 @@ const Interaction = {
         const command = State.undoStack.pop();
         State.redoStack.push(command);
         if (State.redoStack.length > MAX_COMMAND_STACK) State.redoStack.shift();
-        this.restoreScene(command.before);
+        if (command.beforeWorkspace) Workspace.restoreWorkspace(command.beforeWorkspace);
+        else this.restoreScene(command.before);
+        window.Workspace?.scheduleSave();
         this.updateUndoRedoUI();
         this.toast('已撤销');
     },
@@ -1167,7 +1238,9 @@ const Interaction = {
         const command = State.redoStack.pop();
         State.undoStack.push(command);
         if (State.undoStack.length > MAX_COMMAND_STACK) State.undoStack.shift();
-        this.restoreScene(command.after);
+        if (command.afterWorkspace) Workspace.restoreWorkspace(command.afterWorkspace);
+        else this.restoreScene(command.after);
+        window.Workspace?.scheduleSave();
         this.updateUndoRedoUI();
         this.toast('已重做');
     },
@@ -1185,8 +1258,7 @@ const Interaction = {
         node._refs = node._refs.map((ref, index) => {
             const sourceType = ref.sourceType || (ref.linkId ? 'link' : 'manual');
             const sourceNodeName = ref.sourceNodeName || (sourceType === 'manual' ? '手动上传' : '上游节点');
-            const weightRaw = Number(ref.weight);
-            const weight = Number.isFinite(weightRaw) ? Math.max(0.5, Math.min(2, Math.round(weightRaw * 4) / 4)) : 1;
+            const weight = 1;
             return {
                 ...ref,
                 order: Number.isFinite(Number(ref.order)) ? Number(ref.order) : index,
@@ -1233,23 +1305,6 @@ const Interaction = {
             }
         );
         if (changed) this.toast('主参考图已更新');
-    },
-
-    adjustReferenceWeight(node, refId, delta) {
-        if (!node || !refId || !delta) return;
-        const changed = this.runSceneCommand(
-            { historyType: 'edit', historyText: '调整参考图权重', nodeId: node.dataset.nodeId },
-            () => {
-                this.ensureReferenceDefaults(node);
-                const ref = node._refs.find((item) => item.id === refId);
-                if (!ref) return;
-                const next = Math.max(0.5, Math.min(2, Math.round((ref.weight + delta) * 4) / 4));
-                if (Math.abs(next - ref.weight) < 0.001) return;
-                ref.weight = next;
-                this.renderReferences(node);
-            }
-        );
-        if (changed) this.toast('参考图权重已调整');
     },
 
     moveReference(node, refId, offset) {
@@ -1341,94 +1396,62 @@ const Interaction = {
             () => {
                 img.style.filter = `brightness(${brightness}%) contrast(${contrast}%) saturate(${saturate}%)`;
                 this.applyImageTransform(img);
+                this.refreshDownstreamReferences(node);
             }
         );
         this.toast(applied ? '图片编辑已应用' : '参数未变化');
     },
 
-    async runAgentAction(type, triggerEl = null) {
-        const sendBtn = document.getElementById('agent-send-btn');
-        if (sendBtn?.disabled && sendBtn.classList.contains('loading')) return;
-        const agentInput = document.querySelector('.agent-input');
-        const llmLabel = getSelectedAgentLLMLabel();
-        const selectedNode = State.selection.type === 'node' ? State.selection.item : null;
-        const selectedPromptInput = selectedNode?.querySelector('.ai-panel .ai-input');
+    async runAgentAction(type) {
         const presets = {
-            idea: "给我 5 个可落地的视觉创意方向，并附每个方向的关键词。",
-            role: "帮我写一个角色设定：身份、外观、性格、场景和镜头语言。",
-            ref: "帮我列出这个主题的参考图检索词（中英文各 10 条）。"
+            idea: '结合当前画布，给我 5 个可执行的视觉创意方向，并附关键词。',
+            role: '结合当前画布，写出完整的角色设定：身份、外观、性格、场景和镜头语言。',
+            ref: '结合当前画布，列出参考图检索词（中英文各 10 条）。不需要实际搜索。'
         };
-        const text = presets[type] || "";
+        const text = presets[type];
         if (!text) return;
-        this.setAgentBusy(true);
-        this.setAgentStatus(`${llmLabel} 正在整理建议...`, 'busy');
-        if (triggerEl) triggerEl.classList.add('is-running');
-        try {
-            await this.sleep(220);
-            if (agentInput) agentInput.value = text;
-            if (selectedPromptInput) selectedPromptInput.value = text;
-            this.pushHistory('agent', `Agent动作：${type}`);
-            this.setAgentStatus(`建议已填入，可直接发送（${llmLabel}）`, 'success');
-            this.toast('已填入 Agent / 节点输入', 'success');
-        } finally {
-            this.setAgentBusy(false);
-            if (triggerEl) triggerEl.classList.remove('is-running');
-            this.scheduleAgentReady();
-        }
+        document.querySelector('.agent-input').value = text;
+        await this.submitAgentInput();
     },
 
     async submitAgentInput() {
-        const sendBtn = document.getElementById('agent-send-btn');
-        if (sendBtn?.disabled && sendBtn.classList.contains('loading')) return;
+        if (document.getElementById('agent-send-btn')?.disabled) return;
         const input = document.querySelector('.agent-input');
-        const llmLabel = getSelectedAgentLLMLabel();
-        const text = input?.value.trim();
-        if (!text) {
-            this.setAgentStatus('请先输入内容', 'warn');
-            this.toast('先输入内容', 'warn');
-            return;
-        }
-        this.setAgentBusy(true);
-        this.setAgentStatus(`正在通过 ${llmLabel} 发送到画布...`, 'busy');
+        const prompt = input.value.trim();
+        if (!prompt) return this.toast('先输入内容', 'warn');
+        const model = document.getElementById('agent-llm-select').value;
+        if (!Workspace.modelAvailable(model)) return;
+        const selected = State.selection.type === 'node' ? State.selection.item : null;
+        const contextNodes = selected ? [selected] : State.nodes.slice(0, 20).map((node) => node.el);
+        const context = contextNodes.map((node) => [node.dataset.nodeName, this.getUpstreamText(node), node.querySelector('.text-node-input')?.value, node.querySelector('.ai-panel .ai-input')?.value].filter(Boolean).join('\n')).join('\n\n');
+        const controller = new AbortController();
+        Workspace.pending.set('agent', controller);
+        this.setAgentBusy(true); this.setAgentStatus(`${getSelectedAgentLLMLabel()} 正在生成...`, 'busy');
         try {
-            if (State.selection.type === 'node' && State.selection.item?.querySelector('.ai-panel .ai-input')) {
-                State.selection.item.querySelector('.ai-panel .ai-input').value = text;
-                this.setAgentStatus('已写入当前节点', 'success');
-                this.toast('已写入当前节点提示词', 'success');
-            } else {
-                let createdNodeId = null;
-                const created = this.runSceneCommand(
-                    { historyType: 'node', historyText: 'Agent发送创建文本节点' },
-                    () => {
-                        const pos = Engine.screenToCanvas(window.innerWidth * 0.5, window.innerHeight * 0.3);
-                        const nodeEl = UI.createNode('text', pos);
-                        const node = { el: nodeEl, x: pos.x, y: pos.y, type: 'text' };
-                        State.nodes.push(node);
-                        nodeEl.querySelector('.text-node-input').value = text;
-                        createdNodeId = nodeEl.dataset.nodeId;
-                        this.syncCanvasEmptyState();
-                    }
-                );
-                if (created) {
-                    this.setAgentStatus('已创建文本节点', 'success');
-                    this.toast('已创建文本节点', 'success');
-                }
-                if (createdNodeId) {
-                    const latestHistory = State.history[0];
-                    if (latestHistory && latestHistory.type === 'node' && !latestHistory.nodeId) latestHistory.nodeId = createdNodeId;
-                    this.saveHistory();
-                    this.renderHistory();
-                }
-            }
-            this.pushHistory('agent', `Agent发送：${text.slice(0, 28)}`);
-        } finally {
-            this.setAgentBusy(false);
-            this.scheduleAgentReady();
-        }
+            const result = await Workspace.request('/api/chat', { model, prompt, context }, controller.signal);
+            if (controller.signal.aborted) return;
+            let target;
+            this.runSceneCommand({}, () => {
+                const pos = Engine.screenToCanvas(window.innerWidth * 0.35, window.innerHeight * 0.25);
+                target = UI.createNode('text', pos, null, { nodeName: `${getSelectedAgentLLMLabel()} 建议`, modelId: model, status: '已生成' });
+                State.nodes.push({ el: target, x: pos.x, y: pos.y, type: 'text' });
+                target.querySelector('.text-node-input').value = result.text;
+                this.syncCanvasEmptyState();
+            });
+            if (!target?.isConnected) return;
+            this.focusNode(target);
+            document.getElementById('agent-result').textContent = result.text;
+            this.pushHistory('generate', `${getSelectedAgentLLMLabel()} 文本生成`, { nodeId: target.dataset.nodeId, scene: this.captureScene() });
+            this.setAgentStatus('已生成并保存到文本节点', 'success');
+            Workspace.scheduleSave();
+        } catch (error) {
+            this.setAgentStatus('生成失败，输入已保留', 'error');
+            this.toast(error.message, 'error', 5000);
+        } finally { if (Workspace.finishTask('agent', controller)) this.setAgentBusy(false); }
     },
 
     focusNode(nodeEl, options = {}) {
-        const { keepMulti = false } = options;
+        const { keepMulti = false, keepCamera = false, reveal = false } = options;
         if (!nodeEl) return;
         const viewport = document.getElementById('viewport');
         const cx = viewport.clientWidth / 2;
@@ -1439,13 +1462,25 @@ const Interaction = {
         const nodeH = nodeEl.offsetHeight || 280;
         const worldCenterX = nodeX + nodeW / 2;
         const worldCenterY = nodeY + nodeH / 2;
-        State.canvas.x = cx / State.canvas.scale - worldCenterX;
-        State.canvas.y = cy / State.canvas.scale - worldCenterY;
+        if (!keepCamera) {
+            State.canvas.x = SUPPORTS_CSS_ZOOM ? cx / State.canvas.scale - worldCenterX : cx - worldCenterX * State.canvas.scale;
+            State.canvas.y = SUPPORTS_CSS_ZOOM ? cy / State.canvas.scale - worldCenterY : cy - worldCenterY * State.canvas.scale;
+        } else if (reveal && viewport.clientWidth && viewport.clientHeight) {
+            // Reveal only the overflow, instead of recentering every new node.
+            const rect = nodeEl.querySelector('.node-box').getBoundingClientRect();
+            const agent = document.querySelector('.agent-panel:not(.hidden)');
+            const right = (agent ? agent.getBoundingClientRect().left : viewport.clientWidth) - 24;
+            const bottom = viewport.clientHeight - 80;
+            const dx = rect.left < 90 ? 90 - rect.left : rect.right > right ? right - rect.right : 0;
+            const dy = rect.top < 80 ? 80 - rect.top : rect.bottom > bottom ? bottom - rect.bottom : 0;
+            const divisor = SUPPORTS_CSS_ZOOM ? State.canvas.scale : 1;
+            State.canvas.x += dx / divisor; State.canvas.y += dy / divisor;
+        }
         if (!keepMulti) this.clearMultiSelection();
         this.deselect();
         State.selection = { type: 'node', item: nodeEl };
         nodeEl.classList.add('selected');
-        this.requestRender({ canvas: true, lines: true, tempLine: true });
+        this.requestRender({ canvas: true, tempLine: true });
     },
 
     positionRailOverlay(anchorEl, panelEl, shiftY = 0) {
@@ -1548,20 +1583,18 @@ const Interaction = {
         const top = Math.min(this.marqueeStart.y, clientY);
         const width = Math.abs(clientX - this.marqueeStart.x);
         const height = Math.abs(clientY - this.marqueeStart.y);
+        const intersecting = State.nodes.filter((node) => {
+            const rect = node.el.getBoundingClientRect();
+            return !(rect.right < left || rect.left > left + width || rect.bottom < top || rect.top > top + height);
+        });
         marquee.style.left = `${left}px`;
         marquee.style.top = `${top}px`;
         marquee.style.width = `${width}px`;
         marquee.style.height = `${height}px`;
 
         this.clearMultiSelection();
-        State.nodes.forEach((node) => {
-            const rect = node.el.getBoundingClientRect();
-            const intersect = !(rect.right < left || rect.left > left + width || rect.bottom < top || rect.top > top + height);
-            if (intersect) {
-                node.el.classList.add('multi-selected');
-                State.multiSelection.push(node.el);
-            }
-        });
+        this.deselect();
+        intersecting.forEach((node) => { node.el.classList.add('multi-selected'); State.multiSelection.push(node.el); });
         if (State.multiSelection.length) {
             this.deselect();
             State.selection = { type: 'node', item: State.multiSelection[0] };
@@ -1582,18 +1615,29 @@ const Interaction = {
         const view = document.getElementById('viewport');
         view.onmousedown = (e) => {
             const isCanvasBg = (e.target === view || e.target.id === 'canvas');
-            if (e.button === 0 && isCanvasBg && e.shiftKey) {
+            if (e.button === 0 && isCanvasBg && !this.spaceHeld) {
+                document.activeElement?.blur();
+                e.preventDefault();
                 this.stopInertia();
+                this.clearMultiSelection();
+                this.deselect();
+                this.closeNodeMenu();
                 this.beginMarqueeSelection(e.clientX, e.clientY);
+                window.Creative?.layout();
                 return;
             }
-            const startPan = e.button === 1 || (e.button === 0 && isCanvasBg && !e.shiftKey);
+            const startPan = e.button === 1 || (e.button === 0 && this.spaceHeld);
             if (startPan) {
+                e.preventDefault();
                 this.stopInertia();
                 this.isPanning = true;
+                this.lastPointer = { x: e.clientX, y: e.clientY };
+                this.setManipulating(true);
                 this.panVelocity.x = 0;
                 this.panVelocity.y = 0;
                 view.style.cursor = 'grabbing';
+                this.closeNodeMenu();
+                return;
             }
             if (e.target === view || e.target.id === 'canvas') {
                 this.clearMultiSelection();
@@ -1622,41 +1666,45 @@ const Interaction = {
             this.startRenameNode(nodeEl);
         });
         window.onmousemove = (e) => {
+            const dx = this.lastPointer ? e.clientX - this.lastPointer.x : e.movementX || 0;
+            const dy = this.lastPointer ? e.clientY - this.lastPointer.y : e.movementY || 0;
+            this.lastPointer = { x: e.clientX, y: e.clientY };
             this.mouseScreen.x = e.clientX;
             this.mouseScreen.y = e.clientY;
             this.applyTapNowMotion(e.clientX, e.clientY);
             if (this.isMarqueeSelecting) {
-                this.updateMarqueeSelection(e.clientX, e.clientY);
+                this.requestRender({ marquee: true });
                 return;
             }
             if (this.isPanning) {
-                State.canvas.x += e.movementX;
-                State.canvas.y += e.movementY;
-                this.panVelocity.x = this.panVelocity.x * 0.6 + e.movementX * 0.4;
-                this.panVelocity.y = this.panVelocity.y * 0.6 + e.movementY * 0.4;
-                this.requestRender({ canvas: true, lines: true, tempLine: true });
+                State.canvas.x += dx / (SUPPORTS_CSS_ZOOM ? State.canvas.scale : 1);
+                State.canvas.y += dy / (SUPPORTS_CSS_ZOOM ? State.canvas.scale : 1);
+                this.requestRender({ canvas: true, tempLine: true });
             }
             if (this.dragNodes.length) {
                 this.dragNodes.forEach((dragNode) => {
-                    dragNode.x += e.movementX / State.canvas.scale;
-                    dragNode.y += e.movementY / State.canvas.scale;
-                    dragNode.el.style.left = `${dragNode.x}px`;
-                    dragNode.el.style.top = `${dragNode.y}px`;
+                    this.moveNode(dragNode, dx / State.canvas.scale, dy / State.canvas.scale);
                 });
-                if (e.movementX || e.movementY) this.dragMoved = true;
-                this.requestRender({ lines: true, tempLine: true });
+                if (dx || dy) this.dragMoved = true;
+                this.requestRender({ lines: true, tempLine: true, nodePositions: true });
             }
             if (this.dragNode) {
-                this.dragNode.x += e.movementX / State.canvas.scale; this.dragNode.y += e.movementY / State.canvas.scale;
-                this.dragNode.el.style.left = this.dragNode.x + 'px'; this.dragNode.el.style.top = this.dragNode.y + 'px';
-                if (e.movementX || e.movementY) this.dragMoved = true;
-                this.requestRender({ lines: true, tempLine: true });
+                this.moveNode(this.dragNode, dx / State.canvas.scale, dy / State.canvas.scale);
+                if (dx || dy) this.dragMoved = true;
+                this.requestRender({ lines: true, tempLine: true, nodePositions: true });
             }
             if (State.linking.active) {
                 this.requestRender({ tempLine: true });
             }
         };
         window.onmouseup = () => {
+            if (this.dirtyMarquee && this.isMarqueeSelecting) {
+                this.updateMarqueeSelection(this.mouseScreen.x, this.mouseScreen.y); this.dirtyMarquee = false;
+            }
+            this.flushNodePositions();
+            this.setManipulating(false);
+            this.suppressNodeClick = !!this.dragMoved;
+            this.lastPointer = null;
             this.finishMarqueeSelection();
             if (this.connectorPressTimer) {
                 clearTimeout(this.connectorPressTimer);
@@ -1665,14 +1713,18 @@ const Interaction = {
             this.connectorPressEl = null;
             if (this.isPanning) {
                 this.isPanning = false;
-                view.style.cursor = 'grab';
-                if (Math.abs(this.panVelocity.x) > 0.6 || Math.abs(this.panVelocity.y) > 0.6) this.startInertia();
+                view.style.cursor = this.spaceHeld ? 'grab' : '';
+                this.queueSave();
             }
             if (this.dragNodes.length) this.dragNodes.forEach((node) => node.el.classList.remove('dragging'));
             if (this.dragNode) this.dragNode.el.classList.remove('dragging');
             if (this.dragSceneBefore && this.dragMoved) {
-                const afterScene = this.captureScene();
-                if (JSON.stringify(this.dragSceneBefore) !== JSON.stringify(afterScene)) {
+                const positions = new Map(this.dragSceneBefore.nodes.map((n) => [n.id, n]));
+                const changed = (this.dragNodes.length ? this.dragNodes : this.dragNode ? [this.dragNode] : []).some((n) => {
+                    const before = positions.get(n.el.dataset.nodeId); return before && (before.x !== n.x || before.y !== n.y);
+                });
+                if (changed) {
+                    const afterScene = this.captureScene();
                     this.pushCommand(this.dragSceneBefore, afterScene);
                     const targetNode = this.dragNodes[0] || this.dragNode;
                     this.pushHistory('node', this.dragNodes.length > 1 ? `批量移动 ${this.dragNodes.length} 个节点` : '移动节点', {
@@ -1687,6 +1739,11 @@ const Interaction = {
             this.dragNode = null;
         };
         window.onblur = () => {
+            window.onmouseup();
+            this.stopLinking();
+            this.spaceHeld = false;
+            view.style.cursor = '';
+            this.stopInertia();
             this.resetTapNowMotion();
             this.finishMarqueeSelection();
         };
@@ -1696,24 +1753,36 @@ const Interaction = {
             if (e.ctrlKey) {
                 e.preventDefault();
                 const factor = Math.pow(1.08, -e.deltaY / 70);
-                const cx = view.clientWidth / 2;
-                const cy = view.clientHeight / 2;
-                this.zoomAt(cx, cy, factor);
+                this.zoomAt(e.clientX, e.clientY, factor);
                 return;
             }
 
             e.preventDefault();
-            const panSpeed = 0.9;
-            State.canvas.y -= e.deltaY * panSpeed;
-            State.canvas.x -= e.deltaX * panSpeed;
-            this.requestRender({ canvas: true, lines: true, tempLine: true });
+            const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? view.clientHeight : 1;
+            const divisor = SUPPORTS_CSS_ZOOM ? State.canvas.scale : 1;
+            State.canvas.y -= e.deltaY * unit / divisor;
+            State.canvas.x -= e.deltaX * unit / divisor;
+            this.requestRender({ canvas: true, tempLine: true });
         };
+        document.addEventListener('keydown', (e) => {
+            if (e.code !== 'Space' || e.defaultPrevented || isCanvasShortcutControl(e.target) || document.querySelector('dialog[open]')) return;
+            e.preventDefault(); this.spaceHeld = true; view.style.cursor = 'grab';
+        });
+        document.addEventListener('keyup', (e) => { if (e.code === 'Space') { this.spaceHeld = false; if (!this.isPanning) view.style.cursor = ''; } });
 
         document.body.onclick = (e) => {
             if (!e.target.closest('.rail-btn') && !e.target.closest('.rail-popup-panel') && !e.target.closest('.profile-menu')) {
                 this.closeRailPopups();
             }
             const node = e.target.closest('.node');
+            if (e.target.closest('.discard-task-btn') && node) {
+                if (window.Workspace?.pending.has(node.dataset.nodeId)) return this.toast('请先停止等待，再清除查询记录', 'warn');
+                delete node.dataset.videoTask;
+                this.updateNodeStatus(node, '生成节点');
+                window.Workspace?.scheduleSave();
+                this.toast('已清除本节点查询记录；上游任务不会被取消', 'warn', 4000);
+                return;
+            }
             const ratioToggle = e.target.closest('.ratio-toggle');
             const ratioItem = e.target.closest('.ratio-item');
             const sendBtn = e.target.closest('.send-btn');
@@ -1724,8 +1793,6 @@ const Interaction = {
             const refAddBtn = e.target.closest('.ref-add-btn');
             const refDeleteBtn = e.target.closest('.ref-delete-btn');
             const refPrimaryBtn = e.target.closest('.ref-primary-btn');
-            const refWeightDecBtn = e.target.closest('.ref-weight-dec-btn');
-            const refWeightIncBtn = e.target.closest('.ref-weight-inc-btn');
             const refMoveLeftBtn = e.target.closest('.ref-move-left-btn');
             const refMoveRightBtn = e.target.closest('.ref-move-right-btn');
             const refSourceBtn = e.target.closest('.ref-source-btn');
@@ -1733,6 +1800,7 @@ const Interaction = {
             const line = e.target.closest('.line');
 
             if (menuItem) {
+                if (menuItem.disabled || menuItem.dataset.tool || menuItem.hasAttribute('aria-haspopup')) return;
                 if (menuItem.id === 'global-upload-btn') { State.uploadContext = { kind: 'global' }; document.getElementById('file-input').click(); }
                 else {
                     const type = menuItem.dataset.type;
@@ -1748,21 +1816,16 @@ const Interaction = {
                     } else if (State.linking.active && State.linking.startEl?.classList.contains('conn-right')) {
                         startConnector = State.linking.startEl;
                         sourceNodeEl = startConnector.closest('.node');
-                    } else if (State.selection.type === 'node' && State.selection.item) {
-                        const possibleConnector = State.selection.item.querySelector('.conn-right');
-                        if (possibleConnector) {
-                            startConnector = possibleConnector;
-                            sourceNodeEl = State.selection.item;
-                        }
                     }
 
-                    let pos = Engine.screenToCanvas(window.innerWidth/2, window.innerHeight/2);
-                    if (sourceNodeEl) {
+                    let pos = State.menuPosition || Engine.screenToCanvas(window.innerWidth/2, window.innerHeight/2);
+                    if (sourceNodeEl && !State.menuFromDrop) {
                         pos = {
                             x: parseFloat(sourceNodeEl.style.left || '0') + (endConnector ? -520 : 520),
                             y: parseFloat(sourceNodeEl.style.top || '0')
                         };
                     }
+                    if(window.Creative && sourceNodeEl)pos=Creative.freePosition(pos,type,endConnector ? -1 : 1);
                     let createdNodeId = null;
                     const created = this.runSceneCommand(
                         { historyType: 'node', historyText: `新建${type.toUpperCase()}节点` },
@@ -1786,7 +1849,11 @@ const Interaction = {
                         this.saveHistory();
                         this.renderHistory();
                     }
-                    if (created) this.toast('节点已创建');
+                    if (created) {
+                        const node = State.nodes.find((item) => item.el.dataset.nodeId === createdNodeId);
+                        if (node) this.focusNode(node.el, { keepCamera: true, reveal: true });
+                        this.toast('节点已创建');
+                    }
                 }
                 this.closeNodeMenu();
                 return;
@@ -1798,6 +1865,7 @@ const Interaction = {
                     const visible = pop.style.display === 'block';
                     this.closeAllNodePopovers();
                     pop.style.display = visible ? 'none' : 'block';
+                    modelSwitchBtn.setAttribute('aria-expanded', String(!visible));
                 }
                 return;
             }
@@ -1812,19 +1880,20 @@ const Interaction = {
                     const visible = pop.style.display === 'block';
                     this.closeAllNodePopovers();
                     pop.style.display = visible ? 'none' : 'block';
+                    ratioToggle.setAttribute('aria-expanded', String(!visible));
                 }
                 return;
             }
             if (ratioItem) {
                 node.dataset.ratio = ratioItem.dataset.ratio;
-                node.querySelector('.ratio-toggle').innerText = `⬜ ${node.dataset.ratio}`;
+                node.querySelector('.ratio-toggle').innerText = `比例 ${node.dataset.ratio}`;
                 node.querySelectorAll('.ratio-item').forEach(i => i.classList.remove('active'));
                 ratioItem.classList.add('active');
-                node.querySelector('.ratio-popover').style.display = 'none'; return;
+                this.closeAllNodePopovers(); window.Workspace?.scheduleSave(); return;
             }
             if (nodeUpload) { State.uploadContext = { kind: 'node', node }; document.getElementById('file-input').click(); return; }
             if (refAddBtn && node) { State.uploadContext = { kind: 'ref', node }; document.getElementById('file-input').click(); return; }
-            if ((refDeleteBtn || refPrimaryBtn || refWeightDecBtn || refWeightIncBtn || refMoveLeftBtn || refMoveRightBtn || refSourceBtn) && node) {
+            if ((refDeleteBtn || refPrimaryBtn || refMoveLeftBtn || refMoveRightBtn || refSourceBtn) && node) {
                 const refId = e.target.closest('.ref-item')?.dataset.refId;
                 if (!refId) return;
                 if (refDeleteBtn) {
@@ -1836,8 +1905,6 @@ const Interaction = {
                     return;
                 }
                 if (refPrimaryBtn) { this.setPrimaryReference(node, refId); return; }
-                if (refWeightDecBtn) { this.adjustReferenceWeight(node, refId, -0.25); return; }
-                if (refWeightIncBtn) { this.adjustReferenceWeight(node, refId, 0.25); return; }
                 if (refMoveLeftBtn) { this.moveReference(node, refId, -1); return; }
                 if (refMoveRightBtn) { this.moveReference(node, refId, 1); return; }
                 if (refSourceBtn) { this.focusReferenceSource(node, refId); return; }
@@ -1862,6 +1929,7 @@ const Interaction = {
                 return;
             }
             if (node) {
+                if (this.suppressNodeClick) { this.suppressNodeClick = false; return; }
                 if (e.shiftKey) {
                     this.toggleNodeMultiSelection(node);
                     return;
@@ -1877,15 +1945,18 @@ const Interaction = {
             const key = e.key.toLowerCase();
             const isModifier = e.ctrlKey || e.metaKey;
             const activeTag = document.activeElement?.tagName || '';
-            const isTextEditing = activeTag === 'TEXTAREA' || activeTag === 'INPUT';
+            const isTextEditing = activeTag === 'TEXTAREA' || activeTag === 'INPUT' || !!document.activeElement?.isContentEditable;
+            if (document.querySelector('dialog[open]')) return;
 
             if (isModifier && key === 'z') {
+                if (isTextEditing) return;
                 e.preventDefault();
                 if (e.shiftKey) this.redo();
                 else this.undo();
                 return;
             }
             if (isModifier && key === 'y') {
+                if (isTextEditing) return;
                 e.preventDefault();
                 this.redo();
                 return;
@@ -1919,7 +1990,7 @@ const Interaction = {
                 return;
             }
             if (['Delete', 'Backspace'].includes(e.key)) {
-                if (isTextEditing) return;
+                if (isTextEditing || isCanvasShortcutControl(e.target) || isCanvasShortcutControl(document.activeElement)) return;
                 this.deleteSelected();
                 if (State.linking.active) this.stopLinking();
             }
@@ -1951,11 +2022,6 @@ const Interaction = {
         const editorResetBtn = document.getElementById('editor-reset-btn');
         const editorRotateBtn = document.getElementById('editor-rotate-btn');
         const editorMirrorBtn = document.getElementById('editor-mirror-btn');
-        const profileNotifyBtn = document.getElementById('profile-notify-btn');
-        const profileHomeBtn = document.getElementById('profile-home-btn');
-        const profileAccountBtn = document.getElementById('profile-account-btn');
-        const profileTutorialBtn = document.getElementById('profile-tutorial-btn');
-        const profileLogoutBtn = document.getElementById('profile-logout-btn');
         const topChips = Array.from(document.querySelectorAll('.top-chip'));
         const emptyTemplateBtns = Array.from(document.querySelectorAll('.empty-template-btn'));
         const agentChips = Array.from(document.querySelectorAll('.agent-chip'));
@@ -2062,6 +2128,7 @@ const Interaction = {
                         const next = (current + 90) % 360;
                         img.dataset.rotateDeg = String(next);
                         this.applyImageTransform(img);
+                        this.refreshDownstreamReferences(node);
                     }
                 );
                 if (applied) this.toast('已旋转 90°');
@@ -2079,6 +2146,7 @@ const Interaction = {
                     () => {
                         img.dataset.flipX = img.dataset.flipX === '1' ? '0' : '1';
                         this.applyImageTransform(img);
+                        this.refreshDownstreamReferences(node);
                     }
                 );
                 if (applied) this.toast('镜像状态已切换');
@@ -2127,11 +2195,6 @@ const Interaction = {
                 agentHeaderBtns[1].onclick = () => this.toggleRailPopup('history');
             }
         }
-        if (profileNotifyBtn) profileNotifyBtn.onclick = () => this.toast('暂无新通知');
-        if (profileHomeBtn) profileHomeBtn.onclick = () => window.open('https://github.com/dcjrcjfc/infinite-canvas-aigc', '_blank');
-        if (profileAccountBtn) profileAccountBtn.onclick = () => this.toast('账户管理入口预留');
-        if (profileTutorialBtn) profileTutorialBtn.onclick = () => this.toast('教程功能即将上线');
-        if (profileLogoutBtn) profileLogoutBtn.onclick = () => this.toast('已执行登出占位动作');
         if (agentChips.length) {
             if (agentChips[0]) agentChips[0].onclick = () => this.runAgentAction('idea', agentChips[0]);
             if (agentChips[1]) agentChips[1].onclick = () => this.runAgentAction('role', agentChips[1]);
@@ -2164,6 +2227,7 @@ const Interaction = {
         this.syncCanvasEmptyState();
 
         document.body.onmousedown = (e) => {
+            this.suppressNodeClick = false;
             const connector = e.target.closest('.connector');
             if (connector) {
                 this.connectorLongPressTriggered = false;
@@ -2181,11 +2245,22 @@ const Interaction = {
                 }, 260);
             }
             const node = e.target.closest('.node');
-            if (node && !e.target.closest('.ai-panel') && !e.target.closest('.connector') && !e.target.closest('.node-upload-pill')) {
+            if (node && !e.target.closest('textarea, input, video, audio, button, select') && !e.target.closest('.ai-panel') && !e.target.closest('.connector') && !e.target.closest('.node-upload-pill')) {
+                if (e.button !== 0 || this.isPanning) return;
+                document.activeElement?.blur();
+                if (e.shiftKey) return;
+                e.preventDefault();
                 this.stopInertia();
+                this.lastPointer = { x: e.clientX, y: e.clientY };
+                this.setManipulating(true);
                 this.dragSceneBefore = this.captureScene();
                 this.dragMoved = false;
                 const selectedNodeEls = this.getSelectedNodeElements();
+                if (!selectedNodeEls.includes(node)) {
+                    this.clearMultiSelection(); this.deselect();
+                    State.selection = { type: 'node', item: node }; node.classList.add('selected');
+                    window.Creative?.layout();
+                }
                 if (selectedNodeEls.length > 1 && selectedNodeEls.includes(node)) {
                     const selectedSet = new Set(selectedNodeEls);
                     this.dragNodes = State.nodes.filter((n) => selectedSet.has(n.el));
@@ -2199,19 +2274,33 @@ const Interaction = {
             }
         };
 
-        document.getElementById('file-input').onchange = (e) => {
+        document.getElementById('file-input').onchange = async (e) => {
             const file = e.target.files[0];
             if (!file) return;
-            const url = URL.createObjectURL(file);
-            if (!State.uploadContext) return;
+            if (!/^image\/(png|jpeg|webp)$|^video\/(mp4|webm)$|^audio\/(mpeg|mp3|wav|x-wav|ogg|webm|mp4|aac|flac)$/.test(file.type) || file.size > 100 * 1024 * 1024) {
+                this.toast('请选择图片、MP4/WebM 视频或音频，单个文件不超过 100MB', 'warn');
+                e.target.value = ''; return;
+            }
+            const context = State.uploadContext;
+            if (!context) return;
+            if (context.kind === 'ref' && !file.type.startsWith('image/')) { this.toast('参考图仅支持图片；其他素材请连接对应节点', 'warn'); e.target.value = ''; return; }
+            if (context.kind === 'node' && context.node.dataset.nodeType !== (file.type.startsWith('audio/') ? 'audio' : file.type.startsWith('video/') ? 'video' : 'image')) { this.toast('素材类型与节点不匹配，请从全局上传入口导入', 'warn'); e.target.value = ''; return; }
+            if (context.kind === 'ref' && (context.node._refs?.length || 0) >= 16) {
+                this.toast('单个节点最多支持 16 张参考图', 'warn'); e.target.value = ''; State.uploadContext = null; return;
+            }
+            let url;
+            try { url = await ProjectStore.fileDataUrl(file); } catch (error) { this.toast(error.message, 'error'); return; }
+            State.uploadContext = context;
+            if (context.node && !context.node.isConnected) return;
             if (State.uploadContext.kind === 'global') {
                 let createdNodeId = null;
                 const created = this.runSceneCommand(
                     { historyType: 'upload', historyText: `上传素材：${file.name}` },
                     () => {
-                        const pos = Engine.screenToCanvas(window.innerWidth / 2, window.innerHeight / 2);
-                        const nodeType = file.type.includes('video') ? 'video' : 'image';
-                        const el = UI.createNode(nodeType, pos, url, { withPrompt: false });
+                        const nodeType = file.type.startsWith('audio/') ? 'audio' : file.type.includes('video') ? 'video' : 'image';
+                        const center = Engine.screenToCanvas(window.innerWidth / 2, window.innerHeight / 2);
+                        const pos = window.Creative ? Creative.freePosition(center,nodeType) : center;
+                        const el = UI.createNode(nodeType, pos, url, { withPrompt: false, nodeName: file.name });
                         el._rawFile = file;
                         State.nodes.push({ el, x: pos.x, y: pos.y, type: nodeType });
                         createdNodeId = el.dataset.nodeId;
@@ -2227,9 +2316,12 @@ const Interaction = {
                 if (created) this.toast('素材节点已创建');
             } else if (State.uploadContext.kind === 'node') {
                 const targetNode = State.uploadContext.node;
-                targetNode.querySelector('.media-container').innerHTML = file.type.includes('video') ? `<video src="${url}" autoplay loop muted></video>` : `<img src="${url}">`;
+                const beforeUpload = this.captureScene();
+                targetNode.querySelector('.media-container').innerHTML = file.type.startsWith('audio/') ? `<audio src="${url}" controls></audio>` : file.type.includes('video') ? `<video src="${url}" controls muted></video>` : `<img src="${url}" alt="上传图片">`;
                 targetNode._rawFile = file;
                 this.updateNodeStatus(targetNode, '已上传');
+                this.refreshDownstreamReferences(targetNode);
+                this.pushCommand(beforeUpload, this.captureScene());
                 const img = targetNode.querySelector('img');
                 if(img) img.onload = () => this.requestRender({ lines: true });
                 this.pushHistory('upload', `替换素材：${file.name}`, {
@@ -2237,113 +2329,96 @@ const Interaction = {
                     scene: this.captureScene()
                 });
             } else if (State.uploadContext.kind === 'ref') {
-                this.addManualReference(State.uploadContext.node, file);
+                const beforeRef = this.captureScene();
+                try { await this.addManualReference(State.uploadContext.node, file); }
+                catch (error) { this.toast(error.message, 'error'); e.target.value = ''; State.uploadContext = null; return; }
+                this.pushCommand(beforeRef, this.captureScene());
                 this.pushHistory('upload', `添加参考图：${file.name}`, {
                     nodeId: State.uploadContext.node?.dataset.nodeId,
                     scene: this.captureScene()
                 });
             }
             State.uploadContext = null;
+            this.refreshAllReferences();
+            window.Workspace?.scheduleSave();
             e.target.value = '';
         };
     },
 
     async runAI(node) {
-        const prompt = node.querySelector('.ai-panel .ai-input').value.trim();
-        const ratio = node.dataset.ratio;
-        const nodeType = node.dataset.nodeType || 'image';
-        const model = normalizeModelIdForNodeType(node.dataset.model, nodeType);
-        node.dataset.model = model;
+        if (!node || !window.Workspace) return;
         const btn = node.querySelector('.send-btn');
-        if (!prompt) {
-            this.toast('请输入指令', 'warn');
-            return;
-        }
         if (!btn || btn.classList.contains('loading')) return;
-
-        const prevStatus = node.dataset.nodeStatus || '生成节点';
-        const prevBtnText = btn.textContent;
-        btn.classList.add('loading');
-        btn.textContent = '…';
+        if (node.dataset.videoTask) return Workspace.resumeVideo(node);
+        const input = node.querySelector('.ai-panel .ai-input');
+        const ownPrompt = input?.value.trim();
+        if (!ownPrompt) return this.toast('请输入指令', 'warn');
+        const type = node.dataset.nodeType || 'image';
+        const context = this.getUpstreamText(node);
+        const prompt = context ? `上游创作设定：\n${context}\n\n当前任务：\n${ownPrompt}` : ownPrompt;
+        const model = node.dataset.model;
+        if (!Workspace.modelAvailable(model)) return;
+        const previous = node.dataset.nodeStatus;
+        const controller = new AbortController();
+        Workspace.pending.set(node.dataset.nodeId, controller);
+        btn.classList.add('loading'); btn.disabled = true;
         this.updateNodeStatus(node, '生成中');
-
         try {
-            const sizeMap = { "1:1":"1024x1024", "16:9":"1792x1024", "9:16":"1024x1792" };
-            const size = sizeMap[ratio] || "1024x1024";
-            const refFiles = await this.getNodeReferenceFiles(node);
-            const requestFactory = () => {
-                if (refFiles.length) {
-                    const fd = new FormData();
-                    refFiles.forEach((file, index) => fd.append('image', file, file.name || `reference_${index}.png`));
-                    fd.append('prompt', prompt);
-                    fd.append('model', model);
-                    fd.append('image_size', '1K');
-                    return fetch(`${API_PROXY_BASE}/api/images/edits`, {
-                        method: "POST",
-                        headers: { "x-model-id": model },
-                        body: fd
-                    });
-                }
-                return fetch(`${API_PROXY_BASE}/api/images/generations`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json", "x-model-id": model },
-                    body: JSON.stringify({ model, prompt, n: 1, size: size, image_size: "1K" })
-                });
-            };
-
-            const { response, retryCount } = await this.fetchWithRetry(requestFactory, {
-                onRetry: ({ retryCount }) => {
-                    this.toast(`网络波动，自动重试中（${retryCount}/${API_MAX_RETRIES}）`, 'warn', 1500);
-                }
-            });
-            const result = await response.json().catch(() => ({}));
-
-            if (!response.ok) {
-                const errMeta = this.classifyApiError(response.status, result);
-                this.updateNodeStatus(node, prevStatus);
-                this.toast(errMeta.message, 'error', 2600);
-                return;
-            }
-
-            const imageUrl = result?.data?.[0]?.url;
-            if (!imageUrl) {
-                this.updateNodeStatus(node, prevStatus);
-                this.toast('生成异常：服务未返回图片地址，请重试', 'error', 2400);
-                return;
-            }
-
-            node.querySelector('.media-container').innerHTML = `<img src="${imageUrl}">`;
-            this.updateNodeStatus(node, '已生成');
-            node._rawFile = null;
-            const img = node.querySelector('.media-container img');
-            if (img) {
-                img.onload = () => {
-                    this.refreshDownstreamReferences(node);
-                    this.requestRender({ lines: true });
-                };
+            await this.waitForEditedSources(node, controller.signal);
+            this.refreshAllReferences();
+            let result;
+            if (type === 'text') {
+                result = await Workspace.request('/api/chat', { model, prompt }, controller.signal);
+            } else if (type === 'audio') {
+                result = await Workspace.request('/api/audio', { model, prompt, voice: node.querySelector('.audio-voice').value, speed: Number(node.querySelector('.audio-speed').value) }, controller.signal);
             } else {
-                this.refreshDownstreamReferences(node);
-                this.requestRender({ lines: true });
+                const files = await this.getNodeReferenceFiles(node);
+                const images = await Promise.all(files.map((file) => ProjectStore.fileDataUrl(file)));
+                const payload = { model, prompt, ratio: node.dataset.ratio, images };
+                if (type === 'video') {
+                    payload.duration = Number(node.querySelector('.video-duration')?.value || 4);
+                    payload.mode = node.dataset.inputMode || 'first-frame';
+                    if (node.dataset.resolution) payload.resolution = node.dataset.resolution;
+                    result = await Workspace.createVideo(node, payload, controller.signal);
+                } else result = await Workspace.request(images.length ? '/api/images/edits' : '/api/images/generations', payload, controller.signal);
             }
-            this.pushHistory('generate', `生成成功：${model} / ${ratio} / ${prompt.slice(0, 26)}`, {
-                nodeId: node.dataset.nodeId,
-                scene: this.captureScene()
-            });
-            if (retryCount > 0) this.toast(`生成成功（自动重试 ${retryCount} 次）`, 'success', 1900);
-            else this.toast('生成成功', 'success');
-        } catch (err) {
-            this.updateNodeStatus(node, prevStatus);
-            const errMeta = this.classifyApiError(0, null, err?.message || '');
-            this.toast(errMeta.message, 'error', 2600);
+            if (!node.isConnected || controller.signal.aborted) return;
+            const before = this.captureScene();
+            const oldSnapshot = before.nodes.find((item) => item.id === node.dataset.nodeId);
+            if (oldSnapshot) oldSnapshot.status = previous;
+            if (type === 'text') node.querySelector('.text-node-input').value = result.text;
+            else {
+                const container = node.querySelector('.media-container');
+                container.replaceChildren();
+                const media = document.createElement(type === 'audio' ? 'audio' : type === 'video' ? 'video' : 'img');
+                if (type === 'video' || type === 'audio') { media.controls = true; media.muted = type === 'video'; }
+                else media.alt = node.dataset.nodeName || '生成图片';
+                media.src = result.url;
+                media.onload = media.onloadedmetadata = () => this.requestRender({ lines: true });
+                container.appendChild(media);
+                node._rawFile = null;
+            }
+            delete node.dataset.videoTask;
+            this.updateNodeStatus(node, '已生成');
+            this.refreshDownstreamReferences(node);
+            const after = this.captureScene();
+            this.pushCommand(before, after);
+            this.pushHistory('generate', `生成成功：${getModelMeta(model).label} / ${node.dataset.ratio} / ${ownPrompt.slice(0, 26)}`, { nodeId: node.dataset.nodeId, scene: after });
+            Workspace.scheduleSave();
+            this.toast('生成完成，已加入生成历史', 'success');
+        } catch (error) {
+            if (node.isConnected) this.updateNodeStatus(node, node.dataset.videoTask ? '待查询' : previous);
+            this.toast(error.name === 'AbortError' ? '已停止等待；上游任务可能仍在执行，请先查看任务记录' : error.message, 'error', 5000);
         } finally {
-            btn.classList.remove('loading');
-            btn.textContent = prevBtnText || '↑';
+            if (Workspace.finishTask(node.dataset.nodeId, controller)) { btn.classList.remove('loading'); btn.disabled = false; }
+            Workspace.scheduleSave();
         }
     },
 
     closeAllNodePopovers() {
         document.querySelectorAll('.model-popover').forEach((el) => { el.style.display = 'none'; });
         document.querySelectorAll('.ratio-popover').forEach((el) => { el.style.display = 'none'; });
+        document.querySelectorAll('.model-switch,.ratio-toggle').forEach((el) => el.setAttribute('aria-expanded', 'false'));
     },
 
     selectNodeModel(node, modelId) {
@@ -2359,6 +2434,8 @@ const Interaction = {
         });
         const pop = node.querySelector('.model-popover');
         if (pop) pop.style.display = 'none';
+        modelBtn?.setAttribute('aria-expanded', 'false');
+        window.Workspace?.scheduleSave();
     },
 
     refreshDownstreamReferences(sourceNode) {
@@ -2368,36 +2445,48 @@ const Interaction = {
         State.links.forEach((link) => {
             if (link.fromEl.closest('.node') !== sourceNode) return;
             const targetNode = link.toEl.closest('.node');
-            if (!targetNode || !targetNode._refs) return;
-            targetNode._refs = targetNode._refs.map((ref) => {
-                if (ref.linkId !== link.id) return ref;
-                return {
-                    ...ref,
-                    src: sourceMedia.src,
-                    type: sourceMedia.tagName.toLowerCase(),
-                    file: sourceNode._rawFile || null,
-                    sourceType: 'link',
-                    sourceNodeId: sourceNode.dataset.nodeId || null,
-                    sourceNodeName: sourceNode.dataset.nodeName || '上游节点',
-                    sourceLinkId: link.id
-                };
-            });
-            this.ensureReferenceDefaults(targetNode);
-            this.renderReferences(targetNode);
+            if (targetNode) this.addReferenceImage(sourceNode, targetNode, link.id);
         });
+    },
+
+    refreshAllReferences() {
+        State.links.forEach((link) => this.addReferenceImage(link.fromEl.closest('.node'), link.toEl.closest('.node'), link.id));
+    },
+
+    getUpstreamText(node) {
+        const seen = new Set([node.dataset.nodeId]);
+        const text = [];
+        const visit = (target) => State.links.forEach((link) => {
+            if (link.toEl.closest('.node') !== target) return;
+            const source = link.fromEl.closest('.node');
+            if (!source || seen.has(source.dataset.nodeId)) return;
+            seen.add(source.dataset.nodeId); visit(source);
+            const value = source.querySelector('.text-node-input')?.value.trim();
+            if (value) text.push(`${source.dataset.nodeName}：${value}`);
+        });
+        visit(node);
+        return text.join('\n\n');
     },
 
     // === 修改：连线完成逻辑 ===
     completeLink(endEl) {
-        if (State.linking.startEl === endEl || State.linking.startEl.closest('.node') === endEl.closest('.node')) return;
-        if (!State.linking.startEl.classList.contains('conn-right') || !endEl.classList.contains('conn-left')) {
-            this.stopLinking();
-            return;
+        const startEl = State.linking.startEl;
+        if (!startEl?.isConnected || !endEl?.isConnected) { this.stopLinking(); return; }
+        if (startEl.closest('.node') === endEl.closest('.node')) {
+            this.toast('不能连接节点自身', 'warn'); this.stopLinking(); return;
         }
-        const sourceNodeId = State.linking.startEl.closest('.node')?.dataset.nodeId || null;
+        const fromEl = startEl.classList.contains('conn-right') ? startEl : endEl;
+        const toEl = startEl.classList.contains('conn-left') ? startEl : endEl;
+        if (!fromEl.classList.contains('conn-right') || !toEl.classList.contains('conn-left')) {
+            this.toast('请连接节点的输入和输出两侧', 'warn'); this.stopLinking(); return;
+        }
+        if (State.links.some(link => link.fromEl === fromEl && link.toEl === toEl)) {
+            this.toast('这两个节点已经连接', 'warn'); this.stopLinking(); return;
+        }
+        const sourceNodeId = fromEl.closest('.node')?.dataset.nodeId || null;
         const applied = this.runSceneCommand(
             { historyType: 'link', historyText: '新增连线', nodeId: sourceNodeId },
-            () => this.createLinkBetween(State.linking.startEl, endEl)
+            () => this.createLinkBetween(fromEl, toEl)
         );
         if (applied) this.toast('连线已创建');
         this.stopLinking();
@@ -2409,6 +2498,17 @@ const Interaction = {
         const startNodeEl = fromConnectorEl.closest('.node');
         const endNodeEl = toConnectorEl.closest('.node');
         if (!startNodeEl || !endNodeEl || startNodeEl === endNodeEl) return;
+        if (State.links.some((link) => link.fromEl === fromConnectorEl && link.toEl === toConnectorEl)) return;
+        if (State.links.length >= ProjectStore.MAX_LINKS) throw new Error(`画布最多支持 ${ProjectStore.MAX_LINKS} 条连线`);
+        // Workflows are directed acyclic graphs; reject a back edge before changing state.
+        const seen = new Set();
+        const reaches = (node) => {
+            if (node === startNodeEl) return true;
+            if (seen.has(node)) return false;
+            seen.add(node);
+            return State.links.some((link) => link.fromEl.closest('.node') === node && reaches(link.toEl.closest('.node')));
+        };
+        if (reaches(endNodeEl)) { this.toast('这条连线会形成循环，已阻止', 'warn'); return; }
 
         const line = document.createElementNS("http://www.w3.org/2000/svg", "path");
         line.setAttribute('class', 'line');
@@ -2427,25 +2527,40 @@ const Interaction = {
 
     // === 新增：抓取源节点图片并存入目标节点 ===
     addReferenceImage(sourceNode, targetNode, linkId) {
+        if (!sourceNode || !targetNode) return;
         const mediaEl = sourceNode.querySelector('.media-container img') || sourceNode.querySelector('.media-container video');
-        if (!mediaEl) return; 
+        const old = targetNode._refs?.find((ref) => ref.linkId === linkId);
+        if (!mediaEl) {
+            if (old) { targetNode._refs = targetNode._refs.filter((ref) => ref.linkId !== linkId); this.renderReferences(targetNode); }
+            return;
+        }
 
         if (!targetNode._refs) targetNode._refs = [];
-        targetNode._refs = targetNode._refs.filter(r => r.linkId !== linkId);
+        const oldIndex = targetNode._refs.findIndex((ref) => ref.linkId === linkId);
+        if (mediaEl.tagName === 'IMG' && (mediaEl.style.filter || Number(mediaEl.dataset.rotateDeg || 0) || mediaEl.dataset.flipX === '1') && !mediaEl.naturalWidth) {
+            if (!mediaEl._referenceLoadPending) {
+                mediaEl._referenceLoadPending = true;
+                mediaEl.addEventListener('load', () => { mediaEl._referenceLoadPending = false; this.refreshDownstreamReferences(sourceNode); }, { once: true });
+            }
+            return;
+        }
+        const renderedSrc = mediaEl.tagName === 'IMG' ? this.getRenderedImageSource(sourceNode) : mediaEl.src;
 
-        targetNode._refs.push({ 
-            id: `ref_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-            linkId: linkId, 
-            src: mediaEl.src,
+        const nextRef = {
+            id: old?.id || `ref_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+            linkId: linkId,
+            src: renderedSrc,
             type: mediaEl.tagName.toLowerCase(),
-            file: sourceNode._rawFile,
+            file: old?.src === renderedSrc ? old.file : null,
             weight: 1,
-            isPrimary: !targetNode._refs.some((ref) => ref.isPrimary),
+            isPrimary: old?.isPrimary ?? !targetNode._refs.some((ref) => ref.isPrimary),
             sourceType: 'link',
             sourceNodeId: sourceNode.dataset.nodeId || null,
             sourceNodeName: sourceNode.dataset.nodeName || '上游节点',
             sourceLinkId: linkId
-        });
+        };
+        if (oldIndex < 0) targetNode._refs.push(nextRef);
+        else targetNode._refs[oldIndex] = nextRef;
         this.ensureReferenceDefaults(targetNode);
         this.renderReferences(targetNode);
     },
@@ -2462,7 +2577,6 @@ const Interaction = {
             item.className = `ref-item ${ref.isPrimary ? 'is-primary' : ''}`;
             item.dataset.refId = ref.id;
             const sourceText = this.escapeHtml(this.getReferenceSourceText(ref));
-            const weightText = `${(ref.weight || 1).toFixed(2).replace(/\.00$/, '')}x`;
             const canMoveLeft = index > 0 ? '' : 'disabled';
             const canMoveRight = index < node._refs.length - 1 ? '' : 'disabled';
             const mediaMarkup = ref.type === 'video'
@@ -2478,9 +2592,6 @@ const Interaction = {
                     <div class="ref-meta-actions">
                         <button class="ref-order-btn ref-move-left-btn" type="button" ${canMoveLeft}>←</button>
                         <button class="ref-order-btn ref-move-right-btn" type="button" ${canMoveRight}>→</button>
-                        <button class="ref-weight-btn ref-weight-dec-btn" type="button">-</button>
-                        <span class="ref-weight-value">${this.escapeHtml(weightText)}</span>
-                        <button class="ref-weight-btn ref-weight-inc-btn" type="button">+</button>
                         <button class="ref-delete-btn" type="button">移除</button>
                     </div>
                 </div>
@@ -2489,10 +2600,11 @@ const Interaction = {
         });
     },
 
-    addManualReference(node, file) {
+    async addManualReference(node, file) {
         if (!node || !file) return;
         if (!node._refs) node._refs = [];
-        const src = URL.createObjectURL(file);
+        if (node._refs.length >= 16) throw new Error('单个节点最多支持 16 张参考图');
+        const src = await ProjectStore.fileDataUrl(file);
         const type = file.type.includes('video') ? 'video' : 'img';
         node._refs.push({
             id: `ref_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
@@ -2513,16 +2625,56 @@ const Interaction = {
 
     removeReferenceById(node, refId) {
         if (!node || !node._refs) return;
+        const removed = node._refs.find((ref) => ref.id === refId);
+        if (removed?.linkId) State.links = State.links.filter((link) => { if (link.id !== removed.linkId) return true; link.pathEl.remove(); return false; });
         node._refs = node._refs.filter(ref => ref.id !== refId);
         this.ensureReferenceDefaults(node);
         this.renderReferences(node);
+    },
+
+    async waitForEditedSources(node, signal) {
+        const sources = [node, ...State.links.filter((link) => link.toEl.closest('.node') === node).map((link) => link.fromEl.closest('.node'))];
+        for (const source of sources) {
+            const img = source?.querySelector('.media-container img');
+            if (!img || (!img.style.filter && !Number(img.dataset.rotateDeg || 0) && img.dataset.flipX !== '1') || img.naturalWidth) continue;
+            if (img.complete) throw new Error('参考图片无法解码，请重新上传有效图片');
+            await new Promise((resolve, reject) => {
+                const finish = (error) => { clearTimeout(timer); img.removeEventListener('load', loaded); img.removeEventListener('error', failed); signal?.removeEventListener('abort', aborted); error ? reject(error) : resolve(); };
+                const loaded = () => finish();
+                const failed = () => finish(new Error('参考图片加载失败，请重新上传'));
+                const aborted = () => finish(new DOMException('已取消等待', 'AbortError'));
+                const timer = setTimeout(() => finish(new Error('参考图片仍在加载，请稍后重试')), 15000);
+                img.addEventListener('load', loaded, { once: true }); img.addEventListener('error', failed, { once: true }); signal?.addEventListener('abort', aborted, { once: true });
+                if (signal?.aborted) aborted();
+            });
+        }
+    },
+
+    getRenderedImageSource(node) {
+        const img = node.querySelector('.media-container img');
+        if (!img) return null;
+        const rotate = Number(img.dataset.rotateDeg || 0);
+        const flip = img.dataset.flipX === '1';
+        if (!img.style.filter && !rotate && !flip) return img.src;
+        if (!img.naturalWidth) throw new Error('图片尚未加载完成，请稍后再使用编辑结果');
+        const canvas = document.createElement('canvas');
+        const swapped = Math.abs(rotate % 180) === 90;
+        canvas.width = swapped ? img.naturalHeight : img.naturalWidth;
+        canvas.height = swapped ? img.naturalWidth : img.naturalHeight;
+        const context = canvas.getContext('2d');
+        context.translate(canvas.width / 2, canvas.height / 2);
+        context.scale(flip ? -1 : 1, 1); context.rotate(rotate * Math.PI / 180);
+        context.filter = img.style.filter || 'none';
+        context.drawImage(img, -img.naturalWidth / 2, -img.naturalHeight / 2);
+        try { return canvas.toDataURL('image/png'); }
+        catch { throw new Error('该远程图片不允许读取编辑结果，请下载后重新上传'); }
     },
 
     async createFileFromImageUrl(url) {
         const resp = await fetch(url);
         if (!resp.ok) throw new Error(`fetch image failed: ${resp.status}`);
         const blob = await resp.blob();
-        const ext = blob.type.includes('jpeg') ? 'jpg' : 'png';
+        const ext = blob.type.includes('jpeg') ? 'jpg' : blob.type.includes('webp') ? 'webp' : 'png';
         return new File([blob], `reference_${Date.now()}.${ext}`, { type: blob.type || 'image/png' });
     },
 
@@ -2535,35 +2687,43 @@ const Interaction = {
                 return a.isPrimary ? -1 : 1;
             });
         const files = [];
+        if (refs.some((ref) => ref.type === 'video')) throw new Error('当前生成接口不支持视频作为参考输入，请移除视频连线或改用首帧图片');
 
         for (const ref of refs) {
             if (ref.type !== 'img') continue;
             if (ref.file) {
-                const repeat = ref.weight >= 1 ? Math.min(4, Math.max(1, Math.round(ref.weight))) : 1;
-                for (let i = 0; i < repeat; i += 1) files.push(ref.file);
+                files.push(ref.file);
                 continue;
             }
             try {
                 const file = await this.createFileFromImageUrl(ref.src);
                 ref.file = file;
-                const repeat = ref.weight >= 1 ? Math.min(4, Math.max(1, Math.round(ref.weight))) : 1;
-                for (let i = 0; i < repeat; i += 1) files.push(file);
+                files.push(file);
             } catch (err) {
-                console.warn('reference image fetch failed', err);
+                throw new Error('无法读取参考图，请重新上传这张图片后再生成');
             }
         }
 
         // 无流转参考图时，退化为当前节点自己的图片输入
-        if (!files.length && node._rawFile && node._rawFile.type.includes('image')) {
-            files.push(node._rawFile);
+        if (!files.length && (node._rawFile?.type.includes('image') || node.dataset.nodeStatus === '已上传')) {
+            const own = node.querySelector('.media-container img');
+            if (own) files.push(await this.createFileFromImageUrl(this.getRenderedImageSource(node)));
         }
 
         return files;
     },
 
-    stopLinking() { if (State.linking.startEl) State.linking.startEl.classList.remove('active'); State.linking.active = false; document.getElementById('temp-line').setAttribute('d', ''); },
+    stopLinking() {
+        this.cancelLinkDrag?.();
+        clearTimeout(this.connectorPressTimer);
+        this.connectorPressTimer = null; this.connectorPressEl = null; this.connectorLongPressTriggered = false;
+        State.linking.startEl?.classList.remove('active');
+        State.linking = { active: false, startEl: null };
+        document.body.classList.remove('is-linking');
+        document.getElementById('temp-line').setAttribute('d', '');
+    },
     deselect() { if(State.selection.item) State.selection.item.classList.remove('selected'); State.selection = {type:null, item:null}; },
-    
+
     // === 修改：删除节点或连线时，同步清理参考图数据 ===
     deleteSelected() {
         const { type, item } = State.selection;
@@ -2590,7 +2750,7 @@ const Interaction = {
                         return !rel;
                     });
                     State.nodes = State.nodes.filter((n) => !nodeSet.has(n.el));
-                    selectedNodes.forEach((nodeEl) => nodeEl.remove());
+                    selectedNodes.forEach((nodeEl) => { UI.nodeResizeObserver?.unobserve(nodeEl.querySelector('.node-box')); nodeEl.remove(); });
                     this.clearMultiSelection();
                     this.deselect();
                     this.syncCanvasEmptyState();
@@ -2601,6 +2761,7 @@ const Interaction = {
         }
 
         const targetItem = selectedNodes[0] || item;
+        selectedNodes.forEach((node) => window.Workspace?.pending.get(node.dataset.nodeId)?.abort());
         const historyType = type === 'line' ? 'link' : 'node';
         const historyText = type === 'line' ? '删除连线' : '删除节点';
         const nodeId = type === 'line' ? (item.closest('.node')?.dataset.nodeId || null) : (targetItem?.dataset?.nodeId || null);
@@ -2645,4 +2806,3 @@ const Interaction = {
 Interaction.init();
 UI.updateCanvas();
 UI.updateZoomUI();
-document.oncontextmenu = e => e.preventDefault();

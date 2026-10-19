@@ -1,0 +1,7 @@
+# Keep upstream shader strings and license text exactly as the build emits them.
+无限画布/login-scene.js linguist-generated=true -whitespace
+无限画布/scene3d.js linguist-generated=true -whitespace
+无限画布/vendor-icons.js linguist-generated=true
+无限画布/media-encoder.js linguist-generated=true
+无限画布/THIRD_PARTY_NOTICES.txt -whitespace
+client/licenses/* -whitespace

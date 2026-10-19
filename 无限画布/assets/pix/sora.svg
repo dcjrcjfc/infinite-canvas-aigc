@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="20.09 23.84 215.56 215.56" fill="none">
+  <title>Sora - Drifting Cloud</title>
+  <defs>
+    <radialGradient id="so-body" cx=".32" cy=".15" r=".95">
+      <stop stop-color="hsl(202 100% 95%)"/><stop offset=".3" stop-color="hsl(207 94% 81%)"/><stop offset=".68" stop-color="hsl(217 81% 62%)"/><stop offset="1" stop-color="hsl(225 58% 39%)"/>
+    </radialGradient>
+    <linearGradient id="so-flow" x1="83" y1="165" x2="141" y2="225" gradientUnits="userSpaceOnUse">
+      <stop stop-color="hsl(203 99% 85%)"/><stop offset=".32" stop-color="hsl(211 92% 65%)"/><stop offset=".55" stop-color="hsl(217 77% 49%)"/><stop offset="1" stop-color="hsl(222 62% 29%)"/>
+    </linearGradient>
+    <linearGradient id="so-face" x1="92" y1="97" x2="140" y2="146" gradientUnits="userSpaceOnUse">
+      <stop stop-color="hsl(226 67% 14%)"/><stop offset="1" stop-color="hsl(220 81% 30%)"/>
+    </linearGradient>
+  </defs>
+  <path d="M57 83C47 53 72 27 102 30 124 29 140 41 145 59 172 47 197 59 202 81 225 84 238 103 231 126 225 145 210 152 191 156 161 178 113 185 75 170 47 174 23 159 23 135 22 112 36 90 57 83Z" fill="url(#so-body)" stroke="hsl(216 66% 54%)" stroke-width="1.1"/>
+  <path d="M26 136C39 163 88 167 132 160 172 154 209 139 230 119 229 140 210 152 191 156 161 178 113 185 75 170 47 174 23 159 26 136Z" fill="url(#so-flow)" opacity=".75"/>
+  <path d="M47 183C89 197 135 184 181 169 154 196 108 216 72 205Z" fill="url(#so-flow)" stroke="hsl(217 60% 54%)" stroke-width="1"/>
+  <path d="M88 219C118 223 148 211 170 197 155 222 132 237 108 233Z" fill="url(#so-flow)" stroke="hsl(219 57% 47%)" stroke-width="1"/>
+  <path d="M49 184C93 196 138 183 177 171M91 220C119 223 146 213 165 202" stroke="hsl(207 100% 89%)" stroke-width="1.8" stroke-linecap="round"/>
+  <path d="M28 130C30 109 43 94 62 89 54 61 73 35 101 35 121 34 136 45 142 60" stroke="hsl(204 100% 97%)" stroke-width="2" stroke-linecap="round" opacity=".85"/>
+  <path d="M149 63C170 55 190 65 196 81" stroke="hsl(207 100% 90%)" stroke-width="1.6"/>
+  <path d="M82 101C90 92 108 91 114 100 121 110 114 124 103 127 89 132 76 114 82 101Z" fill="url(#so-face)" transform="rotate(-12 98 110)"/>
+  <path d="M149 99C159 91 175 94 179 104 182 115 174 127 163 126 150 125 143 110 149 99Z" fill="url(#so-face)" transform="rotate(-12 161 110)"/>
+  <path d="m102 98 2 8 8 3-8 3-4 8-2-9-7-3 8-2Zm64 1 2 7 7 3-7 3-4 7-2-8-6-3 7-2Z" fill="hsl(208 100% 99%)"/>
+  <path d="M117 139C122 146 132 146 138 136" stroke="hsl(222 73% 23%)" stroke-width="3.6" stroke-linecap="round"/>
+  <path d="M76 49C82 44 89 42 97 42" stroke="hsl(203 100% 99%)" stroke-width="5" stroke-linecap="round" opacity=".8"/>
+</svg>

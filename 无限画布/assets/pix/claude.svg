@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="23.41 26.66 209.18 209.18" fill="none">
+  <title>Claude - Offbeat Asterisk</title>
+  <defs>
+    <linearGradient id="cl-front" x1="77" y1="36" x2="163" y2="212" gradientUnits="userSpaceOnUse">
+      <stop stop-color="hsl(25 100% 83%)"/><stop offset=".4" stop-color="hsl(20 87% 68%)"/><stop offset=".75" stop-color="hsl(15 75% 56%)"/><stop offset="1" stop-color="hsl(13 66% 40%)"/>
+    </linearGradient>
+    <linearGradient id="cl-back" x1="155" y1="47" x2="84" y2="221" gradientUnits="userSpaceOnUse">
+      <stop stop-color="hsl(19 90% 58%)"/><stop offset=".55" stop-color="hsl(14 73% 41%)"/><stop offset="1" stop-color="hsl(10 67% 25%)"/>
+    </linearGradient>
+    <linearGradient id="cl-edge" x1="73" y1="32" x2="189" y2="230" gradientUnits="userSpaceOnUse">
+      <stop stop-color="hsl(31 100% 92%)"/><stop offset="1" stop-color="hsl(23 98% 66%)"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(128 128) scale(.94) translate(-128 -128)" stroke-linejoin="round">
+    <path d="m110 117-21-84q-2-9 7-8l29 11 10 77-13 20Z" fill="url(#cl-front)"/>
+    <path d="m96 25 20 72 6 36 13-20-10-77Z" fill="url(#cl-back)"/>
+    <path d="m137 115 35-87 24 18-47 81-20 9Z" fill="url(#cl-front)"/>
+    <path d="m172 28 1 30-44 78 20-9 47-81Z" fill="url(#cl-back)"/>
+    <path d="m153 132 68-47 16 24-76 36-29-2Z" fill="url(#cl-front)"/>
+    <path d="m221 85-48 43-41 15 29 2 76-36Z" fill="url(#cl-back)"/>
+    <path d="m150 150 76 31-17 27-75-46-8-16Z" fill="url(#cl-front)"/>
+    <path d="m150 150 60 44 16-13-76-31-24-4 8 16 75 46 1-14Z" fill="url(#cl-back)" opacity=".72"/>
+    <path d="m125 165 24 66-31 7-13-76 15-13Z" fill="url(#cl-front)"/>
+    <path d="m120 149 3 58-5 31 31-7-24-66Z" fill="url(#cl-back)"/>
+    <path d="m105 148-52 66-25-14 66-69 21 5Z" fill="url(#cl-front)"/>
+    <path d="m115 136-62 78-25-14 59-38Z" fill="url(#cl-back)" opacity=".55"/>
+    <path d="m97 124-78-24 10-31 83 45 5 19Z" fill="url(#cl-front)"/>
+    <path d="m29 69 43 37 45 27-20-9-78-24Z" fill="url(#cl-back)"/>
+    <path d="m68 53-7-17 9 2 6 20Zm140 92 25 2-4 9-22-5ZM81 223l7-20 7 4-5 20Z" fill="url(#cl-front)"/>
+    <path d="m91 33 19 79m62-81-33 81m-43 5L30 71m123 63 67-46m-69 65 72 29m-116-16 13 68m-18-84-50 62" stroke="url(#cl-edge)" stroke-width="1.8" stroke-linecap="round"/>
+  </g>
+</svg>

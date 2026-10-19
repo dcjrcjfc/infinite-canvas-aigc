@@ -2,10 +2,14 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>AIGC Workflow - NanoBanana Final Fix</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Infinite Canvas · AIGC 创作工作台</title>
     <link rel="stylesheet" href="./style.css">
+    <link rel="stylesheet" href="./creative.css">
+    <link rel="stylesheet" href="./canvas-layout.css">
+    <link rel="stylesheet" href="./workbench.css">
 </head>
-<body>
+<body class="workspace-loading">
 
 <div id="viewport">
     <div id="canvas">
@@ -15,93 +19,71 @@
 </div>
 <section id="canvas-empty-state" class="canvas-empty-state">
     <div class="empty-headline">
-        <span class="empty-badge">✦ 双击</span>
-        <span class="empty-text">画布自由生成, 或者看模板</span>
+        <span class="empty-badge"><span data-icon="mouse-pointer-2"></span>双击</span>
+        <span class="empty-text">画布自由生成,或者看模板</span>
     </div>
-    <p class="empty-subline">也可以直接使用模板，一键生成基础创作链路</p>
-    <div class="empty-template-row">
-        <button class="empty-template-btn" data-template="character" type="button">
-            <span class="empty-template-title">角色设定流</span>
-            <span class="empty-template-desc">人设文本 → 风格探索 → 主视觉</span>
-        </button>
-        <button class="empty-template-btn" data-template="storyboard" type="button">
-            <span class="empty-template-title">分镜草案流</span>
-            <span class="empty-template-desc">剧情大纲 → 镜头 A → 镜头 B</span>
-        </button>
-        <button class="empty-template-btn" data-template="poster" type="button">
-            <span class="empty-template-title">海报概念流</span>
-            <span class="empty-template-desc">概念文案 → 构图草图 → 终稿海报</span>
-        </button>
+    <div class="empty-quick-row">
+        <button class="empty-quick" data-quick="text-video" type="button"><span data-icon="video"></span>文字生视频</button>
+        <button class="empty-quick" data-quick="background" type="button"><span data-icon="sliders-horizontal"></span>图片换背景</button>
+        <button class="empty-quick" data-quick="first-frame" type="button"><span data-icon="sparkles"></span>首帧生视频</button>
+        <button class="empty-quick" data-quick="audio-video" type="button"><span data-icon="audio-lines"></span>音频生视频</button>
+        <button class="empty-quick" data-quick="template" type="button"><span data-icon="layout-list"></span>模板</button>
     </div>
 </section>
 
 <header class="app-topbar">
-    <div class="brand-pill">
-        <span class="brand-dot"></span>
-        <span class="brand-name">Design Sketch (0408)</span>
-    </div>
-    <div class="top-actions">
-        <button class="top-chip">AI 角色库已上线</button>
-        <button class="top-chip top-chip-light">立即探索</button>
-        <button class="top-chip">社区</button>
-    </div>
+    <button class="brand-pill" id="project-menu-toggle" type="button" aria-label="项目菜单" aria-expanded="false"><img class="brand-symbol" src="./assets/tapnow/logo.webp" width="24" height="24" alt=""><span class="brand-name">未命名项目</span><span data-icon="chevron-down"></span></button>
+    <div class="top-actions"><span id="save-indicator" role="status">本地项目</span><button id="service-top-btn" class="icon-control status-dot" aria-label="服务设置" title="服务设置" data-icon="plug"></button><button id="model-overview-btn" class="model-capsule" aria-label="查看可用模型" title="本站已配置的可用模型"><span data-icon="brain"></span><span id="available-model-count">模型</span></button><button id="community-btn" class="community-capsule" type="button"><span data-icon="sparkles"></span>社区</button><button id="share-project-btn" class="icon-control" aria-label="导出项目分享" title="导出项目分享" data-icon="share-2"></button></div>
 </header>
+<section class="project-toolbar" aria-label="画布列表">
+    <label class="canvas-search"><span data-icon="search"></span><input id="canvas-search-input" type="search" placeholder="搜索画布" aria-label="搜索画布" autocomplete="off"></label>
+    <div id="canvas-project-list" class="canvas-project-list" aria-label="已保存的画布"></div>
+    <div class="canvas-list-footer"><button id="canvas-create-btn" type="button"><span data-icon="plus"></span>新建画布</button><button id="canvas-manage-btn" type="button" aria-label="当前画布设置" title="重命名、导入与导出" data-icon="settings-2"></button></div>
+</section>
+<dialog id="project-settings-dialog" class="project-settings" aria-label="当前画布设置">
+    <div class="canvas-settings-head"><h2>画布设置</h2><button type="button" data-close-dialog aria-label="关闭画布设置" data-icon="x"></button></div>
+    <label class="project-name-label">画布名称 <input id="project-name" value="未命名项目" maxlength="80" aria-label="项目名称"></label>
+    <span id="project-status" role="status">正在恢复项目…</span>
+    <div class="project-actions">
+        <button id="project-save-btn" type="button">保存</button>
+        <button id="project-export-btn" type="button">导出</button>
+        <button id="project-recover-btn" type="button" hidden>导出原始备份</button>
+        <button id="project-import-btn" type="button">导入</button>
+        <button id="project-new-btn" type="button">新建</button>
+        <button id="project-switcher-btn" type="button">切换画布</button>
+        <button class="top-chip" title="角色模板">角色模板</button><button class="top-chip" title="分镜模板">分镜模板</button><button class="top-chip" title="项目源码">源码</button>
+        <a class="login-page-entry" href="/zh-CN/login">登录首页</a>
+    </div>
+</dialog>
+<input type="file" id="project-file" accept=".json,application/json" hidden>
 
-<aside class="agent-panel">
-    <div class="agent-header">
-        <div class="agent-header-actions">
-            <button class="agent-icon-btn" title="新建">＋</button>
-            <button class="agent-icon-btn" title="对话">◦</button>
-            <button id="agent-collapse-btn" class="agent-icon-btn" title="关闭">×</button>
-        </div>
-    </div>
-    <div class="agent-body">
-        <p class="agent-greet">Hi 设计师，今天想一起创作什么？</p>
-        <div class="agent-actions">
-            <button class="agent-chip">找灵感</button>
-            <button class="agent-chip">写角色设定</button>
-            <button class="agent-chip">找参考图</button>
-        </div>
-        <textarea class="agent-input" placeholder="描述想法，或指定节点添加上下文..."></textarea>
-        <div class="agent-footer">
-            <div class="agent-foot-meta">
-                <select id="agent-llm-select" class="agent-llm-select" aria-label="Agent 模型选择">
-                    <option value="gemini">Gemini</option>
-                    <option value="chatgpt">ChatGPT</option>
-                    <option value="deepseek">DeepSeek</option>
-                </select>
-                <span id="agent-status" class="agent-status">已就绪</span>
-            </div>
-            <button id="agent-send-btn" class="agent-send-btn">↑</button>
-        </div>
-    </div>
+<aside class="agent-panel" aria-label="创意 Agent">
+    <div class="agent-header"><button id="chat-list-btn" class="icon-control" aria-label="对话列表" aria-expanded="false" aria-controls="conversation-menu" data-icon="folder"></button><select id="chat-select" aria-label="当前对话"><option>新建对话</option></select><div class="agent-header-actions"><button class="agent-icon-btn" title="新建对话" aria-label="新建对话" data-icon="square-pen"></button><button id="agent-fullscreen" class="icon-control" aria-label="Agent 全屏" data-icon="maximize-2"></button><button id="agent-more-btn" class="agent-icon-btn" aria-label="更多助手操作" aria-expanded="false" aria-controls="agent-more-menu" data-icon="ellipsis"></button><button id="agent-collapse-btn" class="agent-icon-btn utility-control" title="关闭" aria-label="关闭助手" data-icon="x"></button></div></div>
+    <div class="agent-body"><div class="agent-welcome"><div class="agent-hello"><img src="./assets/tapnow/assistant-mark.png" width="24" height="24" alt=""><span>Hi，创作者!</span></div><p class="agent-greet">今天一起创作点什么？</p><div class="agent-actions"><button class="agent-chip" type="button"><strong><span data-icon="lightbulb"></span>帮我按我的风格继续创作<span class="suggestion-arrow" data-icon="arrow-right"></span></strong><span class="suggestion-description">贴近我的画面气质和语言节奏推进。</span></button><button class="agent-chip" type="button"><strong><span data-icon="grid-2x2"></span>根据我的偏好创建专属 Skill<span class="suggestion-arrow" data-icon="arrow-right"></span></strong><span class="suggestion-description">按我的创作偏好设计专属 Skill 方向。</span></button></div><button id="refresh-suggestions" class="icon-control" aria-label="换一组创作建议" title="换一组创作建议" data-icon="refresh-cw"></button></div>
+    <div id="agent-result" class="agent-result" aria-live="polite"></div><div id="chat-messages" class="chat-messages" aria-live="polite"></div>
+    <div class="agent-composer"><div id="agent-context" class="agent-context"></div><textarea class="agent-input" placeholder="随心输入" aria-label="给 Agent 的要求"></textarea><div class="agent-footer"><button id="agent-add-context" class="icon-control" aria-label="选择节点上下文" title="选择节点上下文" data-icon="plus"></button><button id="agent-context-mode" class="icon-control" aria-label="手动选择上下文" aria-pressed="false" title="自动引用当前画布，回复由你确认后加入" data-icon="hand"></button><label class="agent-model-control" title="选择 Agent 模型"><span data-icon="circle"></span><select id="agent-llm-select" class="agent-llm-select" aria-label="Agent 模型选择"><option value="gemini">Gemini</option><option value="chatgpt">ChatGPT</option><option value="deepseek">DeepSeek</option></select></label><button id="agent-tools-btn" class="icon-control" aria-label="创作设置" title="创作设置" aria-expanded="false" aria-controls="agent-tools-menu" data-icon="sparkles"></button><button id="agent-voice-btn" class="icon-control" aria-label="语音输入" title="语音输入" data-icon="mic"></button><button id="agent-send-btn" class="agent-send-btn" aria-label="发送给 Agent" data-icon="arrow-up"></button></div><span id="agent-status" class="agent-status" role="status" aria-live="polite">已就绪</span></div></div>
 </aside>
-<button id="agent-fab" class="agent-fab" title="打开 Agent">✺</button>
-
-<div class="canvas-controls" id="canvas-controls">
+<button id="agent-fab" class="agent-fab" title="打开创意 Agent" aria-label="打开创意 Agent" data-icon="sparkles"></button>
+<div id="workspace-dock"><div class="dock-main"><div class="view-tools"><button id="minimap-toggle" class="icon-control" aria-label="小地图" title="小地图" data-icon="map"></button><button id="hide-links-toggle" class="icon-control" aria-label="隐藏节点连线" title="隐藏节点连线" data-icon="workflow"></button><button id="snap-toggle" class="icon-control" aria-label="网格吸附" title="网格吸附" data-icon="grid-2x2"></button></div><div class="canvas-controls" id="canvas-controls">
     <button class="canvas-ctl-btn" id="zoom-out-btn" title="缩小">－</button>
-    <input id="zoom-slider" class="zoom-slider" type="range" min="25" max="260" value="100" />
+    <button class="canvas-ctl-btn fit-btn" id="fit-canvas-btn" aria-label="显示全部节点" title="显示全部节点" data-icon="focus"></button><input id="zoom-slider" class="zoom-slider" aria-label="画布缩放" type="range" min="25" max="260" value="100" />
     <button class="canvas-ctl-btn" id="zoom-in-btn" title="放大">＋</button>
     <button class="canvas-ctl-btn" id="zoom-reset-btn" title="重置视图">⌂</button>
+    <button class="canvas-ctl-btn stop-btn" id="stop-generation-btn" title="停止等待生成任务">停止</button>
     <span id="zoom-label" class="zoom-label">100%</span>
-</div>
+</div></div><button id="help-btn" class="icon-control dock-help" aria-label="帮助" title="帮助" data-icon="circle-help"></button></div>
 
-<aside class="left-rail">
-    <button class="rail-main-btn" id="ui-add-btn" title="添加节点" data-tip="添加节点">
-        <span class="rail-icon">＋</span>
-    </button>
-    <div class="rail-divider"></div>
-    <button class="rail-btn" id="rail-history-btn" title="历史" data-tip="历史">
-        <span class="rail-icon">⟲</span>
-    </button>
-    <button class="rail-btn" id="rail-editor-btn" title="图片编辑器" data-tip="图片编辑器">
-        <span class="rail-icon">✂</span>
-    </button>
-    <button class="rail-btn" id="rail-profile-btn" title="个人信息" data-tip="个人信息">
-        <span class="rail-icon">◉</span>
-    </button>
+<aside class="left-rail" aria-label="创作工具">
+<button class="rail-main-btn" id="ui-add-btn" aria-label="添加节点" aria-haspopup="menu" aria-controls="nodeMenu" aria-expanded="false" data-icon="plus"></button>
+<button class="rail-btn" id="node-search-btn" aria-label="节点搜索" aria-keyshortcuts="Control+K Meta+K" data-icon="search"></button>
+<button class="rail-btn" id="asset-library-btn" aria-label="素材库" data-icon="folders"></button>
+<button class="rail-btn" id="timeline-btn" aria-label="剪辑时间线" data-icon="layout-overview"></button>
+<button class="rail-btn" id="rail-agent-btn" aria-label="创意 Agent" data-icon="message-circle"></button>
+<button class="rail-btn" id="rail-history-btn" aria-label="生成历史" data-icon="history"></button>
+<div class="rail-divider"></div>
+<button class="rail-btn utility-control" id="rail-editor-btn" aria-label="图片编辑器" data-icon="sliders-horizontal"></button>
+<button class="rail-btn profile-avatar" id="rail-profile-btn" aria-label="服务设置与访问密码">C</button>
 </aside>
-
 <div id="rail-history-panel" class="rail-popup-panel">
     <div class="rail-popup-title">生成历史</div>
     <div class="history-toolbar">
@@ -133,35 +115,81 @@
     <div class="rail-popup-note">先选中一个图片节点再应用参数</div>
 </div>
 
-<div id="rail-profile-menu" class="profile-menu">
-    <div class="profile-head">
-        <div class="profile-avatar">X</div>
-        <div class="profile-meta">
-            <div class="profile-name">xxiong</div>
-            <div class="profile-email">13719103923tx@gmail.com</div>
-        </div>
-    </div>
-    <button id="profile-notify-btn" class="profile-item" type="button">🔔 我的通知</button>
-    <button id="profile-home-btn" class="profile-item" type="button">👤 个人主页</button>
-    <button id="profile-account-btn" class="profile-item" type="button">⚙ 账户管理</button>
-    <div class="profile-divider"></div>
-    <button id="profile-tutorial-btn" class="profile-item" type="button">❔ 使用教程</button>
-    <button id="profile-logout-btn" class="profile-item" type="button">↪ 登出账号</button>
+<div id="nodeMenu" class="node-menu" role="menu" aria-label="添加内容">
+<div class="menu-section-title">添加节点</div>
+<button class="menu-item" data-type="text" role="menuitem"><span class="icon-box" data-icon="text"></span><span class="label">文本<small>脚本、广告词、品牌文案</small></span></button>
+<button class="menu-item" data-type="image" role="menuitem"><span class="icon-box" data-icon="image"></span><span class="label">图片<small>宣传图、海报、封面</small></span></button>
+<button class="menu-item" data-type="video" role="menuitem"><span class="icon-box" data-icon="video"></span><span class="label">视频<small>宣传视频、动画、短片</small></span></button>
+<button class="menu-item" data-type="audio" role="menuitem"><span class="icon-box" data-icon="audio-lines"></span><span class="label">音频<small>语音合成、导入音乐与音效</small></span></button>
+<div class="menu-section-title">辅助工具</div>
+<button class="menu-item" data-tool="timeline" role="menuitem"><span class="icon-box" data-icon="clapperboard"></span><span class="label">剪辑时间线<small>排序、裁剪、混音、导出 WebM</small></span></button>
+<button class="menu-item" id="scene-menu-trigger" role="menuitem" aria-haspopup="menu" aria-controls="scene-submenu" aria-expanded="false"><span class="icon-box" data-icon="box"></span><span class="label">3D 片场<small>布置场景、角色与镜头</small></span><span class="menu-chevron" data-icon="chevron-right"></span></button>
+<button class="menu-item" data-tool="editor" role="menuitem"><span class="icon-box" data-icon="sliders-horizontal"></span><span class="label">图片编辑器</span></button>
+<div class="menu-section-title">添加资源</div>
+<button class="menu-item" id="global-upload-btn" role="menuitem"><span class="icon-box" data-icon="upload"></span><span class="label">上传<small>图片、视频和音频</small></span></button>
 </div>
-
-<div id="nodeMenu" class="node-menu">
-    <div class="menu-section-title">添加节点</div>
-    <div class="menu-item" data-type="text"><div class="icon-box">≡</div><div class="label">文本节点</div></div>
-    <div class="menu-item" data-type="image"><div class="icon-box">🖼️</div><div class="label">图片节点</div></div>
-    <div class="menu-item" data-type="video"><div class="icon-box">🎬</div><div class="label">视频节点</div></div>
-    <div class="menu-section-title">添加资源</div>
-    <div class="menu-item" id="global-upload-btn"><div class="icon-box">↑</div><div class="label">上传</div></div>
+<div id="scene-submenu" class="scene-submenu" role="menu" aria-label="3D 片场工具" hidden>
+<button class="menu-item" data-type="scene" role="menuitem"><span class="icon-box" data-icon="clapperboard"></span><span class="label">新建片场<small>布置对象、调整镜头与灯光</small></span></button>
+<button class="menu-item" data-tool="glb" role="menuitem"><span class="icon-box" data-icon="box"></span><span class="label">导入 GLB<small>将本地模型加入片场</small></span></button>
 </div>
+<svg id="menu-link-preview" aria-hidden="true" hidden><path></path></svg>
+<input type="file" id="file-input" accept="image/png,image/jpeg,image/webp,video/mp4,video/webm,audio/*">
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-<input type="file" id="file-input">
-<div id="toast" class="toast"></div>
+<dialog id="template-dialog" aria-labelledby="template-heading">
+    <form id="template-form">
+        <div class="dialog-header"><h2 id="template-heading">创建创作流程</h2><button type="button" data-close-dialog aria-label="关闭模板设置">关闭</button></div>
+        <label>流程类型<select id="template-kind"><option value="character">角色设定流</option><option value="storyboard">分镜草案流</option><option value="poster">海报概念流</option></select></label>
+        <label>创作主题<input id="template-theme" maxlength="500" placeholder="例如：雨夜中的未来城市侦探"></label>
+        <div class="form-columns"><label>图片比例<select id="template-ratio"><option>3:4</option><option>16:9</option><option>9:16</option><option>1:1</option><option>2:3</option><option>3:2</option><option>4:3</option><option>7:4</option><option>4:7</option><option>21:9</option></select></label><label>图片节点数量<input id="template-count" type="number" min="1" max="8" value="2" required></label></div>
+        <label id="template-append-row" class="checkbox-row"><input id="template-append" type="checkbox">追加到当前画布</label>
+        <p class="dialog-note">创建文本与图片节点，并依次连接。生成时会读取上游文本和图片。</p>
+        <button class="primary-action" type="submit">创建流程</button>
+    </form>
+</dialog>
 
+<dialog id="settings-dialog" aria-labelledby="settings-heading">
+    <div class="dialog-header"><h2 id="settings-heading">服务设置</h2><button type="button" data-close-dialog>关闭</button></div>
+    <p id="service-summary">正在检查服务…</p>
+    <ul id="service-models" class="service-models"></ul>
+    <p class="dialog-note">未配置的模型需要在本机服务的 .env 中设置 API Key 和供应商模型 ID，然后重启服务。详细配置见项目 README；密钥不会保存到浏览器。</p>
+    <form id="access-form" hidden><label>访问密码<input type="password" id="access-password" autocomplete="current-password" required></label><p id="access-error" class="form-error" role="alert"></p><button class="primary-action" type="submit">解锁访问</button></form>
+    <button id="lock-access-btn" type="button" hidden>锁定访问</button>
+</dialog>
+
+<dialog id="help-dialog" aria-labelledby="help-heading">
+    <div class="dialog-header"><h2 id="help-heading">使用说明</h2><button type="button" data-close-dialog>关闭</button></div>
+    <ol class="help-steps"><li>从模板开始，或双击空白画布添加节点；上传素材会保存在本地项目内。</li><li>短按节点加号可创建相邻节点。拖动右连接点到另一节点的左连接点，或在节点操作条选择连接目标；也保留长按加号连接方式。</li><li>生成时会读取所有上游文本，并把直接连接的图片作为参考图。当前接口按主参考和顺序发送图片，不提供数值权重。</li><li>选择图片比例后生成。视频输入方式、时长、清晰度和参考图数量按服务能力开放；排队任务可停止等待、稍后继续查询。</li><li>亮度、对比度、饱和度、旋转与镜像会作用于下游使用的图片。</li><li>修改自动保存到当前浏览器。使用“导出”备份项目，再在其他浏览器中“导入”；清理浏览器数据会删除本地保存。</li><li>左键拖动空白区域框选，Shift 点击增减选择；滚轮平移，Ctrl + 滚轮围绕鼠标缩放，按住空格或鼠标中键拖动画布；Ctrl+C / Ctrl+V 复制粘贴，Ctrl+Z / Ctrl+Shift+Z 撤销重做。输入框内保留文字撤销。</li><li>多选后使用浮动工具条分组、对齐、网格整理或按连线整理；拖动分组标题整体移动，双击标题重命名。Ctrl+A 全选，Ctrl+D 创建副本，Ctrl+G 分组，Ctrl+Shift+G 取消分组。节点与空白区域右键提供对应操作；拖动节点或连线靠近边缘时自动平移。</li><li>Agent 显示引用的画布节点，调用所选模型后先保存到对话，点击“加入画布”再创建文本节点。建议卡先填入输入框，不自动发送，也没有联网检索。</li><li>音频节点可导入音乐与音效，或配置语音服务后合成。选中素材后可加入时间线，设置排序、入点、时长和音量，预览并导出 WebM。</li><li>3D 片场可布置对象、导入内嵌资源 GLB、调整镜头和灯光，拍摄结果会作为图片节点回到画布。新建画布会保存原项目，使用项目菜单切换。</li></ol>
+</dialog>
+
+<dialog id="new-project-dialog" aria-labelledby="new-project-heading">
+    <div class="dialog-header"><h2 id="new-project-heading">创建新项目</h2><button type="button" data-close-dialog>取消</button></div>
+    <p>当前画布会先保存在此浏览器中。创建后可从项目菜单的“切换画布”返回。</p>
+    <button id="new-project-confirm" class="primary-action" type="button">创建空白项目</button>
+</dialog>
+
+<canvas id="minimap" width="240" height="150" tabindex="0" aria-label="画布小地图，点击定位"></canvas>
+<div id="node-actions" class="node-actions" hidden><button data-node-action="duplicate" title="复制节点" aria-label="复制节点" data-icon="copy"></button><button data-node-action="download" title="下载素材" aria-label="下载素材" data-icon="download"></button><button data-node-action="timeline" title="加入时间线" aria-label="加入时间线" data-icon="clapperboard"></button><button data-node-action="connect" title="连接到另一个节点" aria-label="连接到另一个节点" data-icon="workflow"></button><button data-node-action="delete" title="删除节点" aria-label="删除节点" data-icon="trash-2"></button></div>
+<dialog id="search-dialog" class="search-dialog"><div class="dialog-header"><h2>节点搜索</h2><button data-close-dialog aria-label="关闭搜索" data-icon="x"></button></div><input id="node-search-input" placeholder="搜索名称、提示词或文本…" aria-label="搜索节点"><div id="node-search-results" class="search-results"></div></dialog>
+<section id="asset-panel" class="workspace-panel" hidden aria-label="素材库"><div class="panel-heading"><h2>素材库</h2><button id="asset-close" class="icon-control" aria-label="关闭素材库" data-icon="x"></button></div><input id="asset-search" placeholder="搜索素材名称…" aria-label="搜索素材"><div class="asset-filters"><button data-asset-filter="all" class="active">全部</button><button data-asset-filter="image">图片</button><button data-asset-filter="video">视频</button><button data-asset-filter="audio">音频</button><button data-asset-filter="scene">3D</button></div><button id="asset-upload" class="secondary-action">上传素材</button><div id="asset-grid" class="asset-grid"></div></section>
+<section id="timeline-panel" class="timeline-panel" hidden aria-label="剪辑时间线"><div class="panel-heading"><h2><span data-icon="clapperboard"></span>剪辑时间线</h2><div class="timeline-toolbar"><button id="timeline-add">添加选中素材</button><button id="timeline-export">导出 WebM</button><button id="timeline-close" class="icon-control" aria-label="关闭时间线" data-icon="x"></button></div></div><div class="timeline-layout"><div class="timeline-preview"><canvas id="timeline-preview" width="960" height="540"></canvas><div class="timeline-transport"><button id="timeline-play" aria-label="播放时间线" data-icon="play"></button><button id="timeline-stop" aria-label="停止播放" data-icon="square"></button><span id="timeline-time">0.0 / 0.0 秒</span><input id="timeline-seek" aria-label="时间线位置" type="range" min="0" max="1" value="0" step="0.05"><select id="timeline-ratio" aria-label="时间线比例"><option value="16:9">16:9</option><option value="9:16">9:16</option><option value="1:1">1:1</option></select></div></div><div class="timeline-tracks"><p class="panel-note">画面按顺序播放；音频按开始时间混入。所有裁剪保留原素材。</p><div id="timeline-clips"></div><p id="timeline-status" role="status">添加图片、视频或音频开始剪辑。</p><button id="timeline-cancel-export" hidden>停止导出</button></div></div></section>
+<dialog id="scene-dialog" class="scene-dialog"><div class="dialog-header"><h2>3D 片场</h2><div><button id="scene-snapshot" class="primary-action">拍摄到画布</button><button data-close-dialog aria-label="关闭片场" data-icon="x"></button></div></div><div class="scene-layout"><div id="scene-stage" class="scene-stage"></div><div class="scene-inspector"><p class="panel-note">拖动环绕 · 滚轮缩放 · 右键平移</p><div class="scene-add"><button data-scene-add="box">方体</button><button data-scene-add="sphere">球体</button><button data-scene-add="cylinder">柱体</button><button data-scene-add="actor">人形参考</button></div><button id="scene-import">导入内嵌资源 GLB</button><label>场景对象<select id="scene-object" aria-label="场景对象"></select></label><div id="scene-transform"></div><label>颜色<input id="scene-color" type="color" value="#bfc2c9"></label><button id="scene-remove">删除选中对象</button><label>镜头焦距 / FOV<input id="scene-fov" type="range" min="15" max="100" value="45"></label><label>环境光<input id="scene-light" type="range" min="0.1" max="8" step="0.1" value="3"></label><label>背景<input id="scene-background" type="color" value="#17191c"></label><button id="scene-reset-camera">重置镜头</button><p id="scene-status" role="status">场景会随项目自动保存。</p></div></div></dialog>
+<input id="glb-file" type="file" accept=".glb,model/gltf-binary" hidden>
+<dialog id="project-switcher-dialog" aria-label="切换画布"><div class="dialog-header"><h2>本地画布</h2><button data-close-dialog aria-label="关闭画布列表" data-icon="x"></button></div><p class="dialog-note">画布保存在当前浏览器。导出项目文件可备份或迁移到其他设备。</p><div id="project-list" class="search-results"></div></dialog>
+<dialog id="export-preview-dialog" aria-label="剪辑导出预览"><div class="dialog-header"><h2>剪辑导出预览</h2><button data-close-dialog aria-label="关闭导出预览" data-icon="x"></button></div><video id="export-preview-video" controls playsinline></video><p class="dialog-note">这是本次编码后的实际视频文件。可播放检查，再加入画布继续创作。</p><button id="export-add-to-canvas" class="primary-action">将导出结果加入画布</button></dialog>
+<script src="./vendor-icons.js"></script>
+<script src="./media-encoder.js"></script>
+<script src="./project-store.js"></script>
 <script src="./script.js"></script>
+<script src="./workspace.js"></script>
+<script src="./creative.js"></script>
+<script src="./canvas-navigation.js"></script>
+<script src="./canvas-layout.js"></script>
+<script src="./workbench.js"></script>
+<script src="./motion.js"></script>
+<script src="./timeline.js"></script>
+<script src="./scene3d.js"></script>
+<script src="./performance.js"></script>
 </body>
 </html>
 

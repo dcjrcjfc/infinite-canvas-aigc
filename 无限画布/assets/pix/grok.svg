@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="14.22 14.22 227.55 227.55" fill="none">
+  <title>Grok - Vector Break</title>
+  <defs>
+    <linearGradient id="gr-back" x1="68" y1="42" x2="127" y2="160" gradientUnits="userSpaceOnUse">
+      <stop stop-color="hsl(210 6% 76%)"/><stop offset=".28" stop-color="hsl(210 5% 44%)"/><stop offset=".6" stop-color="hsl(210 4% 21%)"/><stop offset="1" stop-color="hsl(210 4% 10%)"/>
+    </linearGradient>
+    <linearGradient id="gr-wing" x1="218" y1="90" x2="129" y2="216" gradientUnits="userSpaceOnUse">
+      <stop stop-color="hsl(30 12% 98%)"/><stop offset=".42" stop-color="hsl(210 5% 73%)"/><stop offset=".55" stop-color="hsl(210 5% 47%)"/><stop offset=".8" stop-color="hsl(30 8% 96%)"/><stop offset="1" stop-color="hsl(210 5% 59%)"/>
+    </linearGradient>
+    <linearGradient id="gr-slash" x1="105" y1="113" x2="137" y2="146" gradientUnits="userSpaceOnUse">
+      <stop stop-color="hsl(210 7% 49%)"/><stop offset=".44" stop-color="hsl(30 8% 99%)"/><stop offset=".51" stop-color="hsl(210 5% 79%)"/><stop offset=".56" stop-color="hsl(210 6% 31%)"/><stop offset="1" stop-color="hsl(210 5% 12%)"/>
+    </linearGradient>
+  </defs>
+  <path d="M192 35 113 48C64 57 34 92 46 133L54 164 90 126 85 109C80 80 107 59 141 49Z" fill="url(#gr-back)" stroke="hsl(210 5% 53%)" stroke-width="1.2" stroke-linejoin="round"/>
+  <path d="m192 35-70 25c-42 15-61 43-55 73l-13 31-8-31C34 92 64 57 113 48Z" fill="hsl(210 7% 90%)" opacity=".17"/>
+  <path d="m212 80 13 59c11 53-34 88-94 79l-45-7 35-31 21 3c36 4 56-18 50-40l-5-17Z" fill="url(#gr-wing)" stroke="hsl(210 5% 56%)" stroke-width="1.2" stroke-linejoin="round"/>
+  <path d="m212 80 1 65c1 42-36 62-82 61l-45 5 45 7c60 9 105-26 94-79Z" fill="hsl(30 10% 100%)" opacity=".32"/>
+  <path d="m17 239 89-121L239 17l-86 130Z" fill="url(#gr-slash)" stroke="hsl(210 5% 47%)" stroke-width="1" stroke-linejoin="round"/>
+  <path d="m18 238 109-107L238 18" stroke="hsl(30 10% 100%)" stroke-width="1.8"/>
+  <path d="m62 75 26-15 14 6-33 19Zm108 125 30-16-4 15-31 12Z" fill="hsl(210 6% 94%)" opacity=".52"/>
+  <path d="M48 127C39 90 70 57 113 50l69-13m-89 175 39 4c57 8 100-26 91-75" stroke="hsl(210 8% 94%)" stroke-width="1.4" stroke-linecap="round" opacity=".8"/>
+</svg>

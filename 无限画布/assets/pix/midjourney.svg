@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="19.65 19.02 222.7 222.7" fill="none">
+  <title>Midjourney - Origami Voyage</title>
+  <defs>
+    <linearGradient id="mj-front" x1="97" y1="23" x2="124" y2="173" gradientUnits="userSpaceOnUse">
+      <stop stop-color="hsl(30 16% 100%)"/><stop offset=".45" stop-color="hsl(30 7% 91%)"/><stop offset="1" stop-color="hsl(210 6% 58%)"/>
+    </linearGradient>
+    <linearGradient id="mj-return" x1="80" y1="60" x2="156" y2="173" gradientUnits="userSpaceOnUse">
+      <stop stop-color="hsl(210 6% 34%)"/><stop offset=".5" stop-color="hsl(210 5% 64%)"/><stop offset="1" stop-color="hsl(210 9% 94%)"/>
+    </linearGradient>
+    <linearGradient id="mj-hull" x1="116" y1="166" x2="140" y2="217" gradientUnits="userSpaceOnUse">
+      <stop stop-color="hsl(30 14% 99%)"/><stop offset=".38" stop-color="hsl(210 6% 80%)"/><stop offset=".46" stop-color="hsl(210 6% 43%)"/><stop offset="1" stop-color="hsl(210 6% 65%)"/>
+    </linearGradient>
+    <linearGradient id="mj-keel" x1="101" y1="212" x2="179" y2="234" gradientUnits="userSpaceOnUse">
+      <stop stop-color="hsl(210 15% 93%)"/><stop offset=".45" stop-color="hsl(210 10% 59%)"/><stop offset="1" stop-color="hsl(210 7% 33%)"/>
+    </linearGradient>
+  </defs>
+  <g stroke="hsl(210 6% 58%)" stroke-width="1.1" stroke-linejoin="round">
+    <path d="m104 22-73 145 96-40Z" fill="url(#mj-front)"/>
+    <path d="m104 22-21 115-52 30 73-145Z" fill="url(#mj-return)"/>
+    <path d="m104 22 23 105-44 10Z" fill="hsl(30 14% 97%)" opacity=".72"/>
+    <path d="m176 55-37 104 85-39Z" fill="url(#mj-front)"/>
+    <path d="m176 55 12 73-49 31Z" fill="url(#mj-return)"/>
+    <path d="m127 127-3 48-41-38Z" fill="url(#mj-return)"/>
+    <path d="m224 120-26 50-10-42Z" fill="url(#mj-return)"/>
+    <path d="m26 187 210-41-43 53-111 26Z" fill="url(#mj-hull)"/>
+    <path d="m26 187 136-6 74-35-210 41Z" fill="hsl(30 12% 97%)" opacity=".65"/>
+    <path d="m82 225 80-44 31 18Z" fill="hsl(210 6% 34%)" opacity=".48"/>
+    <path d="M62 234C109 245 161 228 200 206 177 233 119 247 62 234Z" fill="url(#mj-keel)"/>
+  </g>
+  <path d="m103 26-70 137m143-105-34 96M28 187l133-5 71-33M65 235c44 7 91-7 130-26" stroke="hsl(30 15% 99%)" stroke-width="1.7" stroke-linecap="round"/>
+</svg>

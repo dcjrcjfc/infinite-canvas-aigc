@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="16.01 16.01 223.98 223.98" fill="none">
+  <title>Gemini - Negative Space Prism</title>
+  <defs>
+    <linearGradient id="gm-r" x1="137" y1="23" x2="215" y2="114" gradientUnits="userSpaceOnUse">
+      <stop stop-color="hsl(4 90% 55%)"/><stop offset=".22" stop-color="hsl(8 96% 80%)"/><stop offset=".61" stop-color="hsl(8 45% 97%)"/><stop offset="1" stop-color="hsl(220 76% 75%)"/>
+    </linearGradient>
+    <linearGradient id="gm-b" x1="221" y1="137" x2="145" y2="222" gradientUnits="userSpaceOnUse">
+      <stop stop-color="hsl(218 100% 62%)"/><stop offset=".36" stop-color="hsl(214 90% 90%)"/><stop offset=".67" stop-color="hsl(215 100% 67%)"/><stop offset="1" stop-color="hsl(225 86% 43%)"/>
+    </linearGradient>
+    <linearGradient id="gm-g" x1="33" y1="143" x2="117" y2="224" gradientUnits="userSpaceOnUse">
+      <stop stop-color="hsl(162 48% 85%)"/><stop offset=".43" stop-color="hsl(144 76% 65%)"/><stop offset="1" stop-color="hsl(156 88% 31%)"/>
+    </linearGradient>
+    <linearGradient id="gm-y" x1="116" y1="34" x2="43" y2="125" gradientUnits="userSpaceOnUse">
+      <stop stop-color="hsl(26 100% 58%)"/><stop offset=".38" stop-color="hsl(48 100% 82%)"/><stop offset=".72" stop-color="hsl(44 100% 55%)"/><stop offset="1" stop-color="hsl(35 93% 42%)"/>
+    </linearGradient>
+  </defs>
+  <path d="m136 20 100 99-37-11c-30-9-44-23-52-53Z" fill="url(#gm-r)" stroke="hsl(8 79% 65%)" stroke-width="1.1" stroke-linejoin="round"/>
+  <path d="m136 20 25 50 75 49-100-99Z" fill="hsl(30 35% 99%)" opacity=".35"/>
+  <path d="m236 119-42-20c-25-12-40-38-47-64l14 35Z" fill="hsl(215 45% 99%)" opacity=".47"/>
+  <path d="m237 137-99 99 10-36c9-31 23-45 54-53Z" fill="url(#gm-b)" stroke="hsl(220 80% 50%)" stroke-width="1.1" stroke-linejoin="round"/>
+  <path d="m237 137-50 26-49 73 99-99Z" fill="hsl(225 86% 46%)" opacity=".4"/>
+  <path d="m118 236-99-99 37 11c30 9 44 23 52 53Z" fill="url(#gm-g)" stroke="hsl(153 60% 40%)" stroke-width="1.1" stroke-linejoin="round"/>
+  <path d="m118 236-25-50-74-49 99 99Z" fill="hsl(154 89% 27%)" opacity=".3"/>
+  <path d="m19 118 99-98-11 36c-9 30-23 44-53 52Z" fill="url(#gm-y)" stroke="hsl(39 89% 49%)" stroke-width="1.1" stroke-linejoin="round"/>
+  <path d="m19 118 50-25 49-73-99 98Z" fill="hsl(49 100% 94%)" opacity=".55"/>
+  <path d="m140 26 89 88m1 26-86 88m-30 1-89-89m1-27 85-85" stroke="hsl(30 50% 99%)" stroke-width="1.6" stroke-linecap="round"/>
+</svg>

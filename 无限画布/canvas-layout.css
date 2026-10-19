@@ -1,0 +1,18 @@
+.canvas-group { position:absolute; box-sizing:border-box; z-index:2; border:1px solid #44474b; border-radius:16px; background:rgba(160,175,191,.035); pointer-events:none; }
+.canvas-group-title { position:absolute; top:-31px; left:10px; max-width:calc(100% - 20px); min-height:24px; padding:2px 8px; color:#a9adb3; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; cursor:grab; pointer-events:auto; user-select:none; border-radius:5px; }
+.canvas-group-title:hover { color:#f0f1f3; background:#242528; }
+.canvas-group-title:active { cursor:grabbing; }
+.canvas-group-title input { width:220px; max-width:100%; padding:2px 5px; background:#171819; border:1px solid #91b8ce; border-radius:4px; color:#eee; font:inherit; }
+.canvas-selection-bounds { position:absolute; z-index:7; box-sizing:border-box; border:1px solid #89b9d4; border-radius:10px; pointer-events:none; }
+.canvas-multi-tools { position:fixed; z-index:1250; display:flex; align-items:center; gap:3px; padding:6px; transform:translateX(-50%); border:1px solid #36383b; border-radius:12px; background:#1c1d1f; box-shadow:0 8px 24px #0006; color:#dedfe2; max-width:calc(100vw - 24px); overflow-x:auto; }
+.canvas-multi-tools [data-selection-count] { color:#969ba3; padding:0 8px; white-space:nowrap; font-size:12px; }
+.canvas-multi-tools button { display:flex; align-items:center; justify-content:center; gap:5px; min-width:32px; height:32px; padding:0 8px; border:0; border-radius:7px; color:inherit; background:transparent; white-space:nowrap; font-size:12px; cursor:pointer; }
+.canvas-multi-tools button svg { width:16px; height:16px; }
+.canvas-multi-tools button:hover,.canvas-command-menu button:hover { background:#333538; color:#fff; }
+.canvas-multi-tools button:active { background:#44474b; }
+.canvas-multi-tools button:focus-visible,.canvas-command-menu button:focus-visible,.canvas-group-title:focus-visible { outline:2px solid #8fbcd5; outline-offset:1px; }
+.canvas-command-menu { position:fixed; z-index:1500; width:206px; padding:5px; border:1px solid #37393c; border-radius:12px; background:#1c1d1f; box-shadow:0 12px 36px #0008; }
+.canvas-command-menu[popover] { margin:0; inset:auto; }
+.canvas-command-menu button { display:block; width:100%; padding:9px 11px; border:0; border-radius:7px; text-align:left; color:#dedfe2; background:transparent; font-size:13px; cursor:pointer; }
+.canvas-command-menu button:disabled { color:#62666d; cursor:default; background:none; }
+.canvas-group[hidden],.canvas-selection-bounds[hidden],.canvas-multi-tools[hidden],.canvas-multi-tools button[hidden],.canvas-command-menu[hidden] { display:none; }
