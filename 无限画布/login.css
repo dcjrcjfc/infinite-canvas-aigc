@@ -15,6 +15,8 @@
 /* User-requested header removals retain the central login/explore actions. */
 .nav{justify-content:flex-end}.nav-actions #language-menu{right:0}.scene-error{position:absolute;bottom:12px;left:50%;transform:translateX(-50%);color:#bbb;font-size:12px;text-align:center;pointer-events:none}.hero{top:47%}.hero h1{grid-template-rows:56px 84px}.hero h1 span:last-child{color:#ccebed;font-size:72px;line-height:84px}.hero-copy{font-size:14px;line-height:23px}.hero-copy span:first-child{font-weight:600}.model-focus img{display:block;margin:0 auto 20px}.model-focus strong{font-weight:600}
 /* Scene timing and exhibition navigation share one animation clock. */
+#stage{--copy-reveal:0}
+@media(min-width:768px){.scene-loading .hero,.scene-loading .model-focus{opacity:0!important;visibility:hidden}.scene-loading .hero button,.scene-loading .hero a{pointer-events:none}.scene-fallback .hero,.scene-fallback .model-focus{opacity:1!important;visibility:visible}}
 .visually-hidden{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 .scene-ready .model-focus img{visibility:hidden}.model-focus small{height:20px}.model-focus strong{height:56px}.model-focus p{height:75px;margin-top:12px}
 .scene-ready .hero,.scene-ready .model-focus{opacity:calc(var(--copy-reveal,1) * (1 - var(--work-mix,0)));transition:none}

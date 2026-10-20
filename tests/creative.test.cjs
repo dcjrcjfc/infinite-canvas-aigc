@@ -594,22 +594,22 @@ test('new local canvas archives the old one and switching restores the full grap
     const b=await app(t,a.database);assert.equal(b.workspace.projectId,secondId);assert.equal(b.State.nodes[0].type,'image');
 });
 
-test('login and explore entry starts an empty canvas with collapsed assistant and open minimap, preserving the old project and refresh',async(t)=>{
+test('login and explore entry starts an empty canvas with collapsed assistant, preserving the old project and refresh',async(t)=>{
     const a=await app(t),original=a.node('text');original.querySelector('.text-node-input').value='原画布内容需要保留';
-    a.w.document.getElementById('project-name').value='已有分镜';a.State.view={minimap:false,snap:true};await a.workspace.save();
+    a.w.document.getElementById('project-name').value='已有分镜';a.State.view={minimap:true,snap:true};await a.workspace.save();
     const oldId=a.workspace.projectId;
     const b=await app(t,a.database,undefined,{entry:true,agentOpen:true});
     assert.equal(b.workspace.ready,true);assert.notEqual(b.workspace.projectId,oldId);
     assert.equal(b.State.nodes.length,0);assert.equal(b.State.links.length,0);assert.equal(b.State.timeline.length,0);
     assert.equal(b.w.document.body.classList.contains('agent-open'),false);assert.equal(b.w.document.getElementById('agent-fab').getAttribute('aria-expanded'),'false');
-    assert.equal(b.State.view.minimap,true);assert.equal(b.w.document.getElementById('minimap').classList.contains('is-open'),true);
+    assert.equal(b.w.document.getElementById('minimap'),null);assert.equal(b.w.document.getElementById('minimap-toggle'),null);
     assert.equal(b.w.document.getElementById('canvas-empty-state').classList.contains('hidden'),false);
     assert.equal(b.w.location.search,'');assert.equal((await b.ProjectStore.listProjects()).length,2);
     const freshId=b.workspace.projectId;b.node('image');await b.workspace.save();
     const refresh=await app(t,a.database);assert.equal(refresh.workspace.projectId,freshId);assert.equal(refresh.State.nodes.length,1);
     assert.equal((await refresh.ProjectStore.listProjects()).length,2,'refresh must restore, not create another blank');
     await refresh.creative.switchProject(oldId);assert.equal(refresh.State.nodes[0].el.querySelector('.text-node-input').value,'原画布内容需要保留');
-    assert.equal(refresh.w.document.getElementById('project-name').value,'已有分镜');assert.equal(refresh.State.view.snap,true);
+    assert.equal(refresh.w.document.getElementById('project-name').value,'已有分镜');assert.equal(refresh.State.view.snap,true);assert.equal(refresh.w.document.getElementById('minimap'),null);
 });
 
 test('failed landing creation never replaces the previous active canvas',async(t)=>{

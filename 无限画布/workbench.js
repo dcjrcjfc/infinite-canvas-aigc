@@ -296,7 +296,7 @@ window.Workbench = {
         document.getElementById('model-overview-btn').title = `本站已配置 ${count} 个可用模型，点击查看服务设置`;
     },
     syncViewButtons() {
-        for (const [id, key] of [['minimap-toggle', 'minimap'], ['hide-links-toggle', 'hideLinks'], ['snap-toggle', 'snap']]) document.getElementById(id).setAttribute('aria-pressed', String(!!State.view?.[key]));
+        for (const [id, key] of [['hide-links-toggle', 'hideLinks'], ['snap-toggle', 'snap']]) document.getElementById(id).setAttribute('aria-pressed', String(!!State.view?.[key]));
     },
     syncGrid() {
         const scale = State.canvas.scale, step = 20 * scale;

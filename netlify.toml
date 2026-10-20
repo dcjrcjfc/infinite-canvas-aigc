@@ -1,0 +1,29 @@
+[build]
+  command = "npm run build:netlify"
+  publish = ".local/netlify-publish"
+  functions = "netlify/functions"
+
+[build.environment]
+  NODE_VERSION = "22"
+
+[functions]
+  node_bundler = "esbuild"
+  included_files = ["netlify/lib/project-validator.mjs"]
+
+[[redirects]]
+  from = "/zh-CN/login"
+  to = "/login.html"
+  status = 200
+
+[[redirects]]
+  from = "/login"
+  to = "/login.html"
+  status = 200
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "no-referrer"
+    X-Frame-Options = "DENY"
+    Content-Security-Policy = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; connect-src 'self' data: blob: https:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'"

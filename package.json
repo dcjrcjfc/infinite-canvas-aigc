@@ -9,7 +9,8 @@
     "build": "node tools/build-client.mjs",
     "start": "node proxy-server.js",
     "test": "node --test tests/*.test.cjs",
-    "check": "node --check proxy-server.js && node --check server/providers.js && node --check 无限画布/script.js && node --check 无限画布/project-store.js && node --check 无限画布/workspace.js && node --check 无限画布/creative.js && node --check 无限画布/motion.js && node --check 无限画布/timeline.js && node --check 无限画布/performance.js && node --check 无限画布/login.js && node --check 无限画布/workbench.js && node --check 无限画布/canvas-navigation.js && node --check 无限画布/canvas-layout.js"
+    "check": "node --check proxy-server.js && node --check server/providers.js && node --check 无限画布/script.js && node --check 无限画布/project-store.js && node --check 无限画布/workspace.js && node --check 无限画布/creative.js && node --check 无限画布/motion.js && node --check 无限画布/timeline.js && node --check 无限画布/performance.js && node --check 无限画布/login.js && node --check 无限画布/workbench.js && node --check 无限画布/canvas-navigation.js && node --check 无限画布/canvas-layout.js && node --check server/shared-projects.js && node --check 无限画布/production.js && node --check 无限画布/production-library.js && node --check 无限画布/image-editor.js && node --check 无限画布/productivity.js && node --check 无限画布/shared-workspace.js && node --check 无限画布/production-boot.js",
+    "build:netlify": "node tools/build-netlify.mjs"
   },
   "devDependencies": {
     "@fix-webm-duration/fix": "^1.0.1",
@@ -18,5 +19,9 @@
     "jsdom": "^29.1.1",
     "lucide": "^1.59.0",
     "three": "^0.186.1"
+  },
+  "dependencies": {
+    "@netlify/blobs": "^11.1.4",
+    "@netlify/database": "^2.0.1"
   }
 }

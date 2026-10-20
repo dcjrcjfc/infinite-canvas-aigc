@@ -5,9 +5,9 @@ const path=require('node:path');
 const {JSDOM}=require('jsdom');
 const root=path.join(__dirname,'..','无限画布');
 
-async function login(t,{failScene=false,rejectPlayback=false}={}){
+async function login(t,{failScene=false,rejectPlayback=false,delayScene=false}={}){
     const dom=new JSDOM(fs.readFileSync(path.join(root,'login.html'),'utf8'),{url:'http://127.0.0.1:18793/zh-CN/login',runScripts:'outside-only',pretendToBeVisual:true});t.after(()=>dom.window.close());
-    const w=dom.window,doc=w.document,frames=new Map(),media=new WeakMap();let seq=0,now=0,clock=0,lastTime=null,slot=-1;
+    const w=dom.window,doc=w.document,frames=new Map(),media=new WeakMap();let seq=0,now=0,clock=0,lastTime=null,slot=-1,ready=!delayScene,sceneOptions;
     const reduced={matches:false,handlers:[],addEventListener(type,callback){this.handlers.push(callback);}};w.matchMedia=()=>reduced;
     w.requestAnimationFrame=callback=>{frames.set(++seq,callback);return seq;};w.cancelAnimationFrame=id=>frames.delete(id);
     w.performance.now=()=>now;
@@ -20,11 +20,12 @@ async function login(t,{failScene=false,rejectPlayback=false}={}){
     const helpers=await import('../client/login-motion.mjs');
     w.LoginScene={...helpers,create(canvas,options){
         if(failScene)throw new Error('test: WebGL unavailable');
-        return {resize(){},resetClock(){lastTime=null;},needsFrame(){return !reduced.matches;},dispose(){},frame(time,{paused}){
-            if(reduced.matches)clock=2.6;else if(!paused&&lastTime!==null)clock+=Math.min(.05,(time-lastTime)/1000);lastTime=time;
+        sceneOptions=options;
+        return {resize(){},resetClock(){lastTime=null;},needsFrame(){return !ready||!reduced.matches;},dispose(){},frame(time,{paused}){
+            if(!ready)clock=0;else if(reduced.matches)clock=2.6;else if(!paused&&lastTime!==null)clock+=Math.min(.05,(time-lastTime)/1000);lastTime=time;
             const next=Math.floor(clock/helpers.CYCLE_SECONDS);
             if(slot!==next){slot=next;options.onFocus([options.models[29],options.models[6]],slot);}
-            return {clock,age:clock%helpers.CYCLE_SECONDS,slot};
+            return {clock,age:clock%helpers.CYCLE_SECONDS,slot,ready};
         }};
     }};
     w.eval(fs.readFileSync(path.join(root,'assets/pix/data.js'),'utf8'));
@@ -32,8 +33,34 @@ async function login(t,{failScene=false,rejectPlayback=false}={}){
     w.eval(fs.readFileSync(path.join(root,'login.js'),'utf8'));
     const tick=(count=1)=>{for(let i=0;i<count;i++){now+=16;const callbacks=[...frames.values()];frames.clear();callbacks.forEach(callback=>callback(now));}};
     const settle=async(count=200)=>{for(let i=0;i<count;i++){tick();await Promise.resolve();}};
-    return {w,doc,tick,settle,reduced,clock:()=>clock,plays:element=>media.get(element)?.plays||0};
+    return {w,doc,tick,settle,reduced,resolveScene(){ready=true;lastTime=null;sceneOptions.onInvalidate();},clock:()=>clock,plays:element=>media.get(element)?.plays||0};
 }
+
+test('first paint and delayed globe assets cannot expose copy ahead of the rendered scene',async(t)=>{
+    const html=fs.readFileSync(path.join(root,'login.html'),'utf8');
+    assert.match(html,/<body class="scene-loading">/);
+    assert.ok(html.indexOf('/login-boot.js')<html.indexOf('/login-scene.js'));
+    const a=await login(t,{delayScene:true});await a.settle(200);
+    assert.equal(a.doc.body.classList.contains('scene-loading'),true);
+    assert.equal(a.doc.body.classList.contains('scene-ready'),false);
+    assert.equal(a.clock(),0);assert.equal(a.doc.getElementById('stage').style.getPropertyValue('--copy-reveal'),'0');
+    a.resolveScene();await a.settle(1);
+    assert.equal(a.doc.body.classList.contains('scene-ready'),true);
+    assert.equal(a.doc.body.classList.contains('scene-loading'),false);
+    assert.equal(a.doc.getElementById('stage').style.getPropertyValue('--copy-reveal'),'0');
+    await a.settle(100);assert.ok(Number(a.doc.getElementById('stage').style.getPropertyValue('--copy-reveal'))>0);
+});
+
+test('a late scene recovers from the loading fallback and a failed scene reveals the login actions',async(t)=>{
+    const a=await login(t,{delayScene:true});
+    a.doc.body.classList.remove('scene-loading');a.doc.body.classList.add('scene-fallback');
+    a.resolveScene();await a.settle(1);
+    assert.equal(a.doc.body.classList.contains('scene-ready'),true);
+    assert.equal(a.doc.body.classList.contains('scene-fallback'),false);
+    const failed=await login(t,{failScene:true});
+    assert.equal(failed.doc.body.classList.contains('scene-loading'),false);
+    assert.equal(failed.doc.body.classList.contains('scene-fallback'),true);
+});
 
 test('showreel adjacent cards, wheel boundaries and return use one persistent media source per work',async(t)=>{
     const a=await login(t),{w,doc}=a,video=doc.getElementById('work-video');await a.settle();

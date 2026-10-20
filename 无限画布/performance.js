@@ -27,7 +27,7 @@
         const results=[];
         try {
             Interaction.restoreScene({nodes:[],links:[],canvas:{x:-4000,y:-4000,scale:.8}});
-            State.view={minimap:true}; Interaction.setAgentPanelOpen(false);
+            State.view={}; Interaction.setAgentPanelOpen(false);
             for(let i=0;i<80;i++) {
                 const x=4200+(i%10)*390,y=4200+Math.floor(i/10)*360;
                 const el=UI.createNode('image',{x,y});State.nodes.push({el,x,y,type:'image'});

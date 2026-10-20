@@ -5,11 +5,15 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>登录 · Infinite Canvas</title>
   <link rel="stylesheet" href="/login.css">
+  <link rel="preload" href="/assets/pix/earth-mask.png" as="image">
+  <link rel="preload" href="/assets/pix/orbit-headline-sc.woff2" as="font" type="font/woff2" crossorigin>
+  <script src="/login-boot.js" defer></script>
   <script src="/assets/pix/data.js" defer></script>
   <script src="/login-scene.js" defer></script>
   <script src="/login.js" defer></script>
 </head>
-<body>
+<body class="scene-loading">
+<noscript><style>.scene-loading .hero,.scene-loading .model-focus{opacity:1!important;visibility:visible!important}.scene-loading .hero button,.scene-loading .hero a{pointer-events:auto!important}</style></noscript>
 <main id="stage">
   <video id="mobile-background" muted loop playsinline preload="none" poster="/assets/pix/mobile-poster.jpg" aria-hidden="true"></video>
   <div class="mobile-shade" aria-hidden="true"></div>

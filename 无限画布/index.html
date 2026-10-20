@@ -8,6 +8,10 @@
     <link rel="stylesheet" href="./creative.css">
     <link rel="stylesheet" href="./canvas-layout.css">
     <link rel="stylesheet" href="./workbench.css">
+    <link rel="stylesheet" href="./production.css">
+    <link rel="stylesheet" href="./production-library.css">
+    <link rel="stylesheet" href="./image-editor.css">
+    <link rel="stylesheet" href="./productivity.css">
 </head>
 <body class="workspace-loading">
 
@@ -64,7 +68,7 @@
     <div class="agent-composer"><div id="agent-context" class="agent-context"></div><textarea class="agent-input" placeholder="随心输入" aria-label="给 Agent 的要求"></textarea><div class="agent-footer"><button id="agent-add-context" class="icon-control" aria-label="选择节点上下文" title="选择节点上下文" data-icon="plus"></button><button id="agent-context-mode" class="icon-control" aria-label="手动选择上下文" aria-pressed="false" title="自动引用当前画布，回复由你确认后加入" data-icon="hand"></button><label class="agent-model-control" title="选择 Agent 模型"><span data-icon="circle"></span><select id="agent-llm-select" class="agent-llm-select" aria-label="Agent 模型选择"><option value="gemini">Gemini</option><option value="chatgpt">ChatGPT</option><option value="deepseek">DeepSeek</option></select></label><button id="agent-tools-btn" class="icon-control" aria-label="创作设置" title="创作设置" aria-expanded="false" aria-controls="agent-tools-menu" data-icon="sparkles"></button><button id="agent-voice-btn" class="icon-control" aria-label="语音输入" title="语音输入" data-icon="mic"></button><button id="agent-send-btn" class="agent-send-btn" aria-label="发送给 Agent" data-icon="arrow-up"></button></div><span id="agent-status" class="agent-status" role="status" aria-live="polite">已就绪</span></div></div>
 </aside>
 <button id="agent-fab" class="agent-fab" title="打开创意 Agent" aria-label="打开创意 Agent" data-icon="sparkles"></button>
-<div id="workspace-dock"><div class="dock-main"><div class="view-tools"><button id="minimap-toggle" class="icon-control" aria-label="小地图" title="小地图" data-icon="map"></button><button id="hide-links-toggle" class="icon-control" aria-label="隐藏节点连线" title="隐藏节点连线" data-icon="workflow"></button><button id="snap-toggle" class="icon-control" aria-label="网格吸附" title="网格吸附" data-icon="grid-2x2"></button></div><div class="canvas-controls" id="canvas-controls">
+<div id="workspace-dock"><div class="dock-main"><div class="view-tools"><button id="hide-links-toggle" class="icon-control" aria-label="隐藏节点连线" title="隐藏节点连线" data-icon="workflow"></button><button id="snap-toggle" class="icon-control" aria-label="网格吸附" title="网格吸附" data-icon="grid-2x2"></button></div><div class="canvas-controls" id="canvas-controls">
     <button class="canvas-ctl-btn" id="zoom-out-btn" title="缩小">－</button>
     <button class="canvas-ctl-btn fit-btn" id="fit-canvas-btn" aria-label="显示全部节点" title="显示全部节点" data-icon="focus"></button><input id="zoom-slider" class="zoom-slider" aria-label="画布缩放" type="range" min="25" max="260" value="100" />
     <button class="canvas-ctl-btn" id="zoom-in-btn" title="放大">＋</button>
@@ -168,7 +172,6 @@
     <button id="new-project-confirm" class="primary-action" type="button">创建空白项目</button>
 </dialog>
 
-<canvas id="minimap" width="240" height="150" tabindex="0" aria-label="画布小地图，点击定位"></canvas>
 <div id="node-actions" class="node-actions" hidden><button data-node-action="duplicate" title="复制节点" aria-label="复制节点" data-icon="copy"></button><button data-node-action="download" title="下载素材" aria-label="下载素材" data-icon="download"></button><button data-node-action="timeline" title="加入时间线" aria-label="加入时间线" data-icon="clapperboard"></button><button data-node-action="connect" title="连接到另一个节点" aria-label="连接到另一个节点" data-icon="workflow"></button><button data-node-action="delete" title="删除节点" aria-label="删除节点" data-icon="trash-2"></button></div>
 <dialog id="search-dialog" class="search-dialog"><div class="dialog-header"><h2>节点搜索</h2><button data-close-dialog aria-label="关闭搜索" data-icon="x"></button></div><input id="node-search-input" placeholder="搜索名称、提示词或文本…" aria-label="搜索节点"><div id="node-search-results" class="search-results"></div></dialog>
 <section id="asset-panel" class="workspace-panel" hidden aria-label="素材库"><div class="panel-heading"><h2>素材库</h2><button id="asset-close" class="icon-control" aria-label="关闭素材库" data-icon="x"></button></div><input id="asset-search" placeholder="搜索素材名称…" aria-label="搜索素材"><div class="asset-filters"><button data-asset-filter="all" class="active">全部</button><button data-asset-filter="image">图片</button><button data-asset-filter="video">视频</button><button data-asset-filter="audio">音频</button><button data-asset-filter="scene">3D</button></div><button id="asset-upload" class="secondary-action">上传素材</button><div id="asset-grid" class="asset-grid"></div></section>
@@ -190,6 +193,12 @@
 <script src="./timeline.js"></script>
 <script src="./scene3d.js"></script>
 <script src="./performance.js"></script>
+<script src="./production.js"></script>
+<script src="./production-library.js"></script>
+<script src="./image-editor.js"></script>
+<script src="./productivity.js"></script>
+<script src="./shared-workspace.js"></script>
+<script src="./production-boot.js"></script>
 </body>
 </html>
 

@@ -1,5 +1,7 @@
 export const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 export const CYCLE_SECONDS = 8.4;
+export const INITIAL_GLOBE_PITCH = .26;
+const WALL_RADIUS = 4.6, WALL_CENTER_Z = 1.6, WALL_ARC = 3;
 export const smoothstep = (a,b,value) => { const t=clamp((value-a)/(b-a),0,1);return t*t*(3-2*t); };
 
 export function typedText(text,age,start=.12,step=.065,end=8.18,reduced=false) {
@@ -60,29 +62,54 @@ export function quietOpacity(x, y, rect) {
 }
 
 export function wallPoint(u, v) {
-    const angle = (u-.5)*2.5;
-    return [Math.sin(angle)*8, (v-.5)*10, 5-Math.cos(angle)*8];
+    const angle = (u-.5)*WALL_ARC;
+    return [Math.sin(angle)*WALL_RADIUS, (v-.5)*10, WALL_CENTER_Z-Math.cos(angle)*WALL_RADIUS];
 }
 
 export function wallUvFromRay(origin, direction) {
     const [x,y,z]=origin,[dx,dy,dz]=direction;
-    const a=dx*dx+dz*dz,b=2*(x*dx+(z-5)*dz),c=x*x+(z-5)*(z-5)-64;
+    const a=dx*dx+dz*dz,b=2*(x*dx+(z-WALL_CENTER_Z)*dz),c=x*x+(z-WALL_CENTER_Z)*(z-WALL_CENTER_Z)-WALL_RADIUS*WALL_RADIUS;
     const discriminant=b*b-4*a*c;
     if(a<1e-10||discriminant<0)return null;
     const distance=(-b+Math.sqrt(discriminant))/(2*a);
     if(distance<0)return null;
-    return [.5+Math.atan2(x+dx*distance,5-z-dz*distance)/2.5,.5+(y+dy*distance)/10];
+    return [.5+Math.atan2(x+dx*distance,WALL_CENTER_Z-z-dz*distance)/WALL_ARC,.5+(y+dy*distance)/10];
 }
 
-export function orbitPoint(phase, track, time=0, pointer={x:0,y:0,strength:0}) {
-    const angle = ((phase%1)+1)%1*Math.PI*2, radius = track ? 1.68 : 1.52;
+// Screen-space springs keep the hit radius and displacement consistent across
+// perspective depth, screen sizes and the two differently tilted tracks.
+export class OrbitSpring {
+    constructor(count=256){this.count=count;this.offset=new Float32Array(count*2);this.velocity=new Float32Array(count*2);}
+    reset(){this.offset.fill(0);this.velocity.fill(0);}
+    step(points,pointer,dt,{reduced=false,paused=false}={}){
+        if(reduced){this.reset();return this.offset;}
+        if(paused)return this.offset;
+        const elapsed=clamp(dt,0,.05),steps=Math.max(1,Math.ceil(elapsed*120)),h=elapsed/steps;
+        for(let i=0;i<this.count;i++){
+            const p=points[i],dx=p.x-pointer.x,dy=p.y-pointer.y,distance=Math.hypot(dx,dy);
+            const weight=pointer.on?Math.exp(-distance*distance/(2*48*48)):0;
+            const previous=points[(i+this.count-1)%this.count],next=points[(i+1)%this.count];
+            let nx=-(next.y-previous.y),ny=next.x-previous.x;
+            const length=Math.hypot(nx,ny)||1;nx/=length;ny/=length;
+            const side=dx*nx+dy*ny;
+            // A continuous signed response avoids a jump when crossing the line.
+            const force=weight*32*Math.tanh(side/12),tx=nx*force,ty=ny*force;
+            for(let step=0;step<steps;step++)for(let axis=0;axis<2;axis++){
+                const k=i*2+axis,target=axis?ty:tx;
+                this.velocity[k]+=(300*(target-this.offset[k])-23*this.velocity[k])*h;
+                this.offset[k]+=this.velocity[k]*h;
+            }
+        }
+        return this.offset;
+    }
+}
+
+export function orbitPoint(phase, track) {
+    const angle = ((phase%1)+1)%1*Math.PI*2, radius = track ? 1.63 : 1.60;
     let x = Math.cos(angle)*radius, y = Math.sin(angle)*radius;
-    const tilt = track ? 1.15 : .98, turn = track ? -.65 : .52;
+    // Cool orbit runs shallowly down-right; warm orbit crosses up-right.
+    const tilt = track ? 1.1 : 1.24, turn = track ? .55 : -.22;
     const z = y*Math.sin(tilt); y *= Math.cos(tilt);
     const rx = x*Math.cos(turn)-y*Math.sin(turn), ry=x*Math.sin(turn)+y*Math.cos(turn);
-    const distance = Math.hypot(rx/1.8-pointer.x, ry/1.8-pointer.y);
-    // Use a whole number of waves per revolution so the interactive displacement
-    // and its slope agree on both sides of the closed track's join.
-    const swell = 1 + pointer.strength*Math.exp(-distance*distance*5)*.028*Math.sin(time*1.6+angle*2);
-    return [rx*swell,ry*swell,z];
+    return [rx,ry-(track?.10:0),z];
 }

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { clamp, smoothstep, CYCLE_SECONDS, typedText, modelFlight, GlobeGesture, LoginNavigation, quietOpacity, wallPoint, wallUvFromRay, orbitPoint } from './login-motion.mjs';
+import { skyFragment } from './login-sky.mjs';
+import { clamp, smoothstep, CYCLE_SECONDS, INITIAL_GLOBE_PITCH, typedText, modelFlight, GlobeGesture, LoginNavigation, quietOpacity, wallPoint, wallUvFromRay, orbitPoint, OrbitSpring } from './login-motion.mjs';
 
 const shader = (uniforms, vertexShader, fragmentShader, extra={}) => new THREE.ShaderMaterial({uniforms,vertexShader,fragmentShader,transparent:true,depthWrite:false,...extra});
 const vertex = 'varying vec2 vUv; void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}';
@@ -11,13 +12,18 @@ function create(canvas, {models, reduced, onFocus=()=>{},onSelect=()=>{},onScrol
     camera.position.set(0,.026,5.55);camera.updateMatrixWorld();
     const root = new THREE.Group(), earth = new THREE.Group(); earth.rotation.z=-.17;root.add(earth);scene.add(root);
     const pointer = {x:0,y:0,tx:0,ty:0,strength:0,on:false};
-    let width=1,height=1,yaw=-.55,pitch=.07,targetYaw=yaw,targetPitch=pitch,hover=-1,disposed=false,lastTime=null,clock=0,blocked=false,viewMix=0;
+    let width=1,height=1,yaw=-.55,pitch=INITIAL_GLOBE_PITCH,targetYaw=yaw,targetPitch=pitch,hover=-1,disposed=false,lastTime=null,clock=0,blocked=false,viewMix=0;
     const gesture=new GlobeGesture();let focusSlot=-1,focusIndices=[],pending=null,docks=[];
     let quiet={left:0,right:0,top:0,bottom:0,width:0,height:0},rippleTime=-10;
     const uniforms={uPointer:{value:new THREE.Vector3()},uCursor:{value:new THREE.Vector2(.5,.5)},uTime:{value:0},uWorkMix:{value:0},uRipple:{value:new THREE.Vector3(0,0,-10)}};
     const cursorUV=new THREE.Vector2(.5,.5),raycaster=new THREE.Raycaster(),localRay=new THREE.Ray(),wallInverse=new THREE.Matrix4(),pointerNDC=new THREE.Vector2();
     const wallGeometry = new THREE.PlaneGeometry(1,1,96,48), pos=wallGeometry.attributes.position, uv=wallGeometry.attributes.uv;
     for(let i=0;i<pos.count;i++)pos.setXYZ(i,...wallPoint(uv.getX(i),uv.getY(i)));
+    // A procedural screen-space sky sits behind the transparent curved grid.
+    const skyUniforms={uPixelRatio:{value:1},uSize:{value:new THREE.Vector2(1,1)},uParallax:{value:new THREE.Vector2()},uText:{value:new THREE.Vector4(.5,.5,.2,.2)},uGlobe:{value:new THREE.Vector3(.5,.5,.3)},uClock:{value:0},uStrength:{value:0},uCool:{value:new THREE.Color('#7ab6dd')},uWarm:{value:new THREE.Color('#e6cdb2')},uSilver:{value:new THREE.Color('#e5eaf2')}};
+    const skyMaterial=shader(skyUniforms,'void main(){gl_Position=vec4(position.xy,1.,1.);}',skyFragment,{transparent:false,depthTest:false});
+    const sky=new THREE.Mesh(new THREE.PlaneGeometry(2,2),skyMaterial);sky.frustumCulled=false;sky.renderOrder=-30;scene.add(sky);
+    const skyPointer=new THREE.Vector2(),globeScreen=new THREE.Vector3();
     const wallMaterial=shader(uniforms,vertex,`
         varying vec2 vUv; uniform vec3 uPointer,uRipple; uniform vec2 uCursor; uniform float uTime,uWorkMix;
         float grid(vec2 p){vec2 a=abs(fract(p-.5)-.5)/max(fwidth(p),vec2(.00001));return 1.-min(min(a.x,a.y),1.);}
@@ -27,19 +33,11 @@ function create(canvas, {models, reduced, onFocus=()=>{},onSelect=()=>{},onScrol
             vec2 ripple=vUv-uRipple.xy;float age=uTime-uRipple.z;
             float wave=sin(length(ripple)*85.-age*6.)*exp(-abs(length(ripple)-age*.15)*20.)*exp(-age*1.5)*step(0.,age);
             vec2 p=vUv+delta*reach*uPointer.z*.018+normalize(ripple+vec2(.0001))*wave*.0015;
-            float lines=grid(p*vec2(104.,60.));
-            vec3 base=mix(vec3(.038,.050,.056),vec3(.065,.064,.058),smoothstep(.15,.95,vUv.x));
-            float light=(.055+uWorkMix*.12+reach*uPointer.z*.11+abs(wave)*.08)*lines;
-            gl_FragColor=vec4(base+vec3(.52,.59,.64)*light,1.);
-        }`,{transparent:false,side:THREE.DoubleSide});
-    const wall=new THREE.Mesh(wallGeometry,wallMaterial);scene.add(wall);
-
-    // Sparse stars share the wall's perspective rather than a flat overlay.
-    const starsGeometry=new THREE.BufferGeometry(),stars=[];
-    for(let i=0;i<260;i++){const u=((i*.61803398875)%1),v=((i*.38196601125+.17)%1);const p=wallPoint(u,v);stars.push(p[0],p[1],p[2]+.05);}
-    starsGeometry.setAttribute('position',new THREE.Float32BufferAttribute(stars,3));
-    const starsMaterial=new THREE.PointsMaterial({color:'#b9cdda',size:.012,sizeAttenuation:true,transparent:true,opacity:.23,depthWrite:false});
-    const starsMesh=new THREE.Points(starsGeometry,starsMaterial);scene.add(starsMesh);
+            float lines=grid(p*vec2(72.,60.));
+            float light=(.105+uWorkMix*.12+reach*uPointer.z*.11+abs(wave)*.08)*lines;
+            gl_FragColor=vec4(vec3(.52,.59,.64),light);
+        }`,{side:THREE.DoubleSide});
+    const wall=new THREE.Mesh(wallGeometry,wallMaterial);wall.renderOrder=-10;scene.add(wall);
 
     const earthUniforms={uDpr:{value:renderer.getPixelRatio()},uQuiet:{value:new THREE.Vector4()},uResolution:{value:new THREE.Vector2()},uTime:{value:0},uAlpha:{value:1}};
     const pointsMaterial=shader(earthUniforms,`
@@ -56,31 +54,50 @@ function create(canvas, {models, reduced, onFocus=()=>{},onSelect=()=>{},onScrol
     `,{depthTest:false});
     const earthGeometry=new THREE.BufferGeometry();
     const points=new THREE.Points(earthGeometry,pointsMaterial);earth.add(points);
-    const mask=new Image();mask.onload=()=>{
+    let earthReady=false;
+    const mask=new Image();
+    function populateEarth(image){
         if(disposed)return;
-        const temp=document.createElement('canvas');temp.width=mask.width;temp.height=mask.height;
-        const context=temp.getContext('2d',{willReadFrequently:true});context.drawImage(mask,0,0);
-        const pixels=context.getImageData(0,0,mask.width,mask.height).data,positions=[],weights=[];
+        let pixels=null;
+        if(image){const temp=document.createElement('canvas');temp.width=mask.width;temp.height=mask.height;
+            const context=temp.getContext('2d',{willReadFrequently:true});context.drawImage(mask,0,0);
+            pixels=context.getImageData(0,0,mask.width,mask.height).data;}
+        const positions=[],weights=[];
         const count=34000,golden=Math.PI*(3-Math.sqrt(5));
         for(let i=0;i<count;i++){
             const y=1-2*(i+.5)/count,a=i*golden,r=Math.sqrt(1-y*y),x=Math.cos(a)*r,z=Math.sin(a)*r;
             const u=((Math.atan2(z,x)/(Math.PI*2)+.5)%1+1)%1,v=Math.acos(y)/Math.PI;
             const pixel=(Math.min(mask.height-1,Math.floor(v*mask.height))*mask.width+Math.min(mask.width-1,Math.floor(u*mask.width)))*4;
-            const land=pixels[pixel]>110&&pixels[pixel+3]>100;
+            const land=!!pixels&&pixels[pixel]>110&&pixels[pixel+3]>100;
             if(land||i%19===0){positions.push(x,y,z);weights.push(land?1:.12);}
         }
         earthGeometry.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));earthGeometry.setAttribute('weight',new THREE.Float32BufferAttribute(weights,1));
-        onInvalidate();
-    };mask.src='/assets/pix/earth-mask.png';
+        if(!earthReady)lastTime=null;
+        earthReady=true;clearTimeout(maskTimeout);onInvalidate();
+    }
+    const maskTimeout=setTimeout(()=>populateEarth(null),5000);
+    mask.onload=()=>{try{populateEarth(mask);}catch{populateEarth(null);}};
+    mask.onerror=()=>populateEarth(null);mask.src='/assets/pix/earth-mask.png';
     const haloMaterial=shader({uAlpha:{value:1}},`
-        varying vec3 vNormal,vEye;void main(){vec4 p=modelViewMatrix*vec4(position,1.);vNormal=normalize(normalMatrix*normal);vEye=normalize(-p.xyz);gl_Position=projectionMatrix*p;}
+        varying vec3 vView,vCenter;varying float vRadius;
+        void main(){vec4 p=modelViewMatrix*vec4(position,1.);vView=p.xyz;
+            vCenter=(modelViewMatrix*vec4(0.,0.,0.,1.)).xyz;
+            vRadius=length(modelViewMatrix[0].xyz);gl_Position=projectionMatrix*p;}
     `,`
-        varying vec3 vNormal,vEye;uniform float uAlpha;void main(){float rim=pow(1.-abs(dot(normalize(vNormal),normalize(vEye))),5.);
-        gl_FragColor=vec4(vec3(.66,.8,.91),rim*.27*uAlpha);}
+        varying vec3 vView,vCenter;varying float vRadius;uniform float uAlpha;
+        void main(){
+            // Ray distance matches the particle sphere's perspective silhouette.
+            // Both the crisp rim and its soft falloff peak at that same edge.
+            float distanceToEdge=length(cross(normalize(vView),vCenter))/vRadius-1.;
+            float edgeWidth=max(.0025,fwidth(distanceToEdge)*.8);
+            float rim=exp(-pow(distanceToEdge/edgeWidth,2.));
+            float hazeWidth=mix(.036,.030,step(0.,distanceToEdge));
+            float haze=exp(-pow(distanceToEdge/hazeWidth,2.));
+            gl_FragColor=vec4(vec3(.80,.89,.98),(.58*rim+.30*haze)*uAlpha);
+        }
     `,{side:THREE.FrontSide,blending:THREE.AdditiveBlending,depthTest:false});
-    const halo=new THREE.Mesh(new THREE.SphereGeometry(1.004,96,64),haloMaterial);root.add(halo);
-    // The atmosphere fades radially. No rectangular mask is drawn behind copy.
-    const outerHalo=halo.clone();outerHalo.scale.setScalar(1.012);outerHalo.material=haloMaterial.clone();root.add(outerHalo);
+    // One continuous atmosphere profile, with room for the exterior soft glow.
+    const halo=new THREE.Mesh(new THREE.PlaneGeometry(2.3,2.3),haloMaterial);root.add(halo);
     const lineMaterial=new THREE.LineBasicMaterial({color:'#8198ab',transparent:true,opacity:.065,depthWrite:false,depthTest:false});
     for(let meridian=0;meridian<6;meridian++){
         const positions=[];for(let i=0;i<=160;i++){const a=i/160*Math.PI*2;positions.push(new THREE.Vector3(Math.cos(a)*Math.cos(meridian*Math.PI/6),Math.sin(a),Math.cos(a)*Math.sin(meridian*Math.PI/6)));}
@@ -88,27 +105,37 @@ function create(canvas, {models, reduced, onFocus=()=>{},onSelect=()=>{},onScrol
     }
 
     const tracks=[];
-    const ringMaterial=shader({uTime:{value:0},uPointer:{value:new THREE.Vector3()},uAlpha:{value:1}},`
-        attribute float phase;varying float vPhase,vDepth;varying vec2 vScreen;
-        void main(){vec4 p=projectionMatrix*modelViewMatrix*vec4(position,1.);vScreen=p.xy/p.w;vPhase=phase;vDepth=position.z;gl_Position=p;}
+    const ringMaterial=shader({uTime:{value:0},uPointer:{value:new THREE.Vector3()},uAlpha:{value:1},uViewport:{value:new THREE.Vector2(1,1)},uTone:{value:new THREE.Color('#759aaf')}},`
+        attribute float phase,edgeSide;attribute vec3 tangent;
+        varying float vPhase,vDepth,vAcross;varying vec2 vScreen;uniform vec2 uViewport;
+        void main(){vec4 p=projectionMatrix*modelViewMatrix*vec4(position,1.);
+            vec4 next=projectionMatrix*modelViewMatrix*vec4(position+tangent,1.);
+            vec2 direction=normalize((next.xy/next.w-p.xy/p.w)*uViewport);
+            vec2 normal=vec2(-direction.y,direction.x);
+            vScreen=p.xy/p.w;vPhase=phase;vDepth=position.z;vAcross=edgeSide*5.;
+            p.xy+=normal*vAcross*2./uViewport*p.w;gl_Position=p;}
     `,`
-        varying float vPhase,vDepth;varying vec2 vScreen;uniform float uTime,uAlpha;uniform vec3 uPointer;
+        varying float vPhase,vDepth,vAcross;varying vec2 vScreen;uniform float uTime,uAlpha;uniform vec3 uPointer,uTone;uniform vec2 uViewport;
         void main(){float pulse=pow(.5+.5*cos(vPhase*6.283185-uTime*.28),16.);
-            float cursor=exp(-dot(vScreen-uPointer.xy,vScreen-uPointer.xy)*24.)*uPointer.z;
-            float alpha=(.12+.48*pulse+.42*cursor)*mix(.34,1.,smoothstep(-1.,1.,vDepth));
-            gl_FragColor=vec4(mix(vec3(.46,.60,.73),vec3(.9,.91,.88),pulse),alpha*uAlpha);}
-    `,{depthTest:false});
+            vec2 delta=(vScreen-uPointer.xy)*uViewport*.5;
+            float cursor=exp(-dot(delta,delta)/(2.*70.*70.))*uPointer.z;
+            float core=1.-smoothstep(.35,.95,abs(vAcross));
+            float glow=exp(-vAcross*vAcross/5.);
+            float alpha=((.19+.43*pulse+.72*cursor)*core+(.04+.06*pulse+.24*cursor)*glow)*mix(.5,1.,smoothstep(-1.,1.,vDepth));
+            gl_FragColor=vec4(mix(uTone,vec3(.9,.94,.98),max(pulse,cursor)),alpha*uAlpha);}
+    `,{depthTest:false,side:THREE.DoubleSide});
     for(let track=0;track<2;track++){
-        const geometry=new THREE.BufferGeometry(),positions=new Float32Array(257*3),phases=[];
-        for(let i=0;i<=256;i++)phases.push(i/256);
+        const geometry=new THREE.BufferGeometry(),positions=new Float32Array(257*6),phases=[],sides=[],indices=[];
+        for(let i=0;i<=256;i++){phases.push(i/256,i/256);sides.push(-1,1);if(i<256){const n=i*2;indices.push(n,n+1,n+2,n+1,n+3,n+2);}}
         geometry.setAttribute('position',new THREE.BufferAttribute(positions,3));geometry.setAttribute('phase',new THREE.Float32BufferAttribute(phases,1));
-        const material=ringMaterial.clone();const line=new THREE.Line(geometry,material);line.frustumCulled=false;scene.add(line);
+        geometry.setAttribute('edgeSide',new THREE.Float32BufferAttribute(sides,1));geometry.setAttribute('tangent',new THREE.BufferAttribute(new Float32Array(257*6),3));geometry.setIndex(indices);
+        const material=ringMaterial.clone();material.uniforms.uTone.value.setRGB(...(track?[.65,.61,.53]:[.46,.60,.73]));const line=new THREE.Mesh(geometry,material);line.frustumCulled=false;scene.add(line);
         const satellites=[];
         for(let i=0;i<6;i++){
             const sprite=new THREE.Sprite(new THREE.SpriteMaterial({map:beaconTexture(),color:track?'#e1d5c6':'#c2dcef',transparent:true,depthWrite:false,depthTest:false,blending:THREE.AdditiveBlending}));
             sprite.scale.setScalar(i===0?.09:.035);scene.add(sprite);satellites.push(sprite);
         }
-        tracks.push({geometry,material,satellites,line});
+        tracks.push({geometry,material,satellites,line,spring:new OrbitSpring(),base:Array.from({length:256},(_,i)=>new THREE.Vector3(...orbitPoint(i/256,track))),screen:Array.from({length:256},()=>new THREE.Vector3()),deformed:Array.from({length:256},()=>new THREE.Vector3())});
     }
     ringMaterial.dispose();
 
@@ -146,7 +173,10 @@ function create(canvas, {models, reduced, onFocus=()=>{},onSelect=()=>{},onScrol
     function resize(w,h,rect){
         width=w;height=h;quiet=rect;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();earthUniforms.uResolution.value.set(w,h);
         earthUniforms.uQuiet.value.set((rect.left+rect.right)/2/w,1-(rect.top+rect.bottom)/2/h,rect.width*.56/w,rect.height*.57/h);
-        docks=getDocks();
+        skyUniforms.uSize.value.set(w*renderer.getPixelRatio(),h*renderer.getPixelRatio());
+        skyUniforms.uPixelRatio.value=renderer.getPixelRatio();
+        skyUniforms.uText.value.set((rect.left+rect.right)/2/w,1-(rect.top+rect.bottom)/2/h,Math.max(.001,rect.width/2/w),Math.max(.001,rect.height/2/h));
+        tracks.forEach(item=>{item.material.uniforms.uViewport.value.set(w,h);item.spring.reset();});docks=getDocks();
     }
     function chooseFocus(slot){
         const selected=[];
@@ -166,18 +196,26 @@ function create(canvas, {models, reduced, onFocus=()=>{},onSelect=()=>{},onScrol
         if(disposed)return;
         const dt=lastTime===null?0:Math.min(.05,(time-lastTime)/1000);lastTime=time;
         blocked=paused;viewMix=mix;
-        const frozen=paused||(gesture.dragging&&gesture.active?.axis!=='vertical');
-        if(reduced.matches)clock=2.6;else if(!frozen)clock+=dt;
+        const frozen=!earthReady||paused||(gesture.dragging&&gesture.active?.axis!=='vertical');
+        if(!earthReady)clock=0;else if(reduced.matches)clock=2.6;else if(!frozen)clock+=dt;
         if(!gesture.active&&!frozen&&!reduced.matches)targetYaw+=dt*Math.PI*2/42;
         const damping=1-Math.exp(-dt*12);yaw+=(targetYaw-yaw)*damping;pitch+=(targetPitch-pitch)*damping;
         const feedback=reduced.matches||frozen?0:1-Math.exp(-dt*8);
         pointer.x+=(pointer.tx-pointer.x)*feedback;pointer.y+=(pointer.ty-pointer.y)*feedback;pointer.strength+=((pointer.on?1:0)-pointer.strength)*feedback;
-        const active=mix<.999,alpha=1-smoothstep(.06,.68,mix),intro=reduced.matches?1:.025+.975*(1-Math.pow(1-clamp((clock-.12)/1.05,0,1),4));
+        const active=earthReady&&mix<.999,alpha=1-smoothstep(.06,.68,mix),intro=reduced.matches?1:.025+.975*(1-Math.pow(1-clamp((clock-.12)/1.05,0,1),4));
         const globeScale=intro*(1-.94*smoothstep(0,1,mix));
         earth.rotation.set(pitch,yaw,-.17);root.visible=active;root.scale.setScalar(globeScale);
-        earthUniforms.uAlpha.value=alpha;haloMaterial.uniforms.uAlpha.value=alpha;outerHalo.material.uniforms.uAlpha.value=alpha;
+        earthUniforms.uAlpha.value=alpha;haloMaterial.uniforms.uAlpha.value=alpha;
         lineMaterial.opacity=.065*alpha;
-        wall.rotation.y=pointer.x*.012;wall.rotation.x=-pointer.y*.009;starsMesh.position.x=pointer.x*.025;starsMesh.position.y=pointer.y*.025;
+        wall.rotation.y=pointer.x*.012;wall.rotation.x=-pointer.y*.009;
+        const skyFollow=paused?0:1-Math.exp(-dt*5);
+        if(reduced.matches)skyPointer.set(0,0);
+        else {skyPointer.x+=((pointer.on?pointer.tx*.65:0)-skyPointer.x)*skyFollow;skyPointer.y+=((pointer.on?pointer.ty*.65:0)-skyPointer.y)*skyFollow;}
+        skyUniforms.uParallax.value.copy(skyPointer);skyUniforms.uClock.value=clock;
+        skyUniforms.uStrength.value=smoothstep(1.05,1.65,clock)*alpha;
+        globeScreen.set(0,0,0).project(camera);
+        const radius=globeScale/(2*Math.tan(14*Math.PI/180)*Math.sqrt(camera.position.lengthSq()-globeScale*globeScale));
+        skyUniforms.uGlobe.value.set(globeScreen.x*.5+.5,globeScreen.y*.5+.5,radius);
         uniforms.uPointer.value.set(pointer.x,pointer.y,pointer.strength);uniforms.uTime.value=clock;uniforms.uWorkMix.value=mix;
         uniforms.uCursor.value.lerp(cursorUV,feedback);
         root.updateMatrixWorld(true);
@@ -216,12 +254,19 @@ function create(canvas, {models, reduced, onFocus=()=>{},onSelect=()=>{},onScrol
         }
         if(hit!==hover&&!gesture.active){hover=hit;canvas.style.cursor=hit>=0?'pointer':'grab';}
         for(let track=0;track<tracks.length;track++){
-            const item=tracks[track],positions=item.geometry.attributes.position;
+            const item=tracks[track],positions=item.geometry.attributes.position,tangents=item.geometry.attributes.tangent;
             item.line.visible=active;item.satellites.forEach(sprite=>{sprite.visible=active;});
             if(!active)continue;
-            for(let i=0;i<=256;i++){const p=orbitPoint(i/256,track,clock,pointer);positions.setXYZ(i,...p.map(value=>value*globeScale));}positions.needsUpdate=true;
-            item.material.uniforms.uTime.value=clock;item.material.uniforms.uPointer.value.set(pointer.x,pointer.y,pointer.strength);item.material.uniforms.uAlpha.value=alpha;
-            item.satellites.forEach((sprite,index)=>{sprite.visible=active;sprite.scale.setScalar((index===0?.09:.035)*globeScale);sprite.position.set(...orbitPoint((clock*.012+index/6)%1,track,clock,pointer).map(value=>value*globeScale));sprite.material.opacity=(.2+(.5+.5*Math.sin(clock*.3+index))*.65)*alpha;});
+            for(let i=0;i<256;i++){const p=item.screen[i].copy(item.base[i]).multiplyScalar(globeScale).project(camera);p.set((p.x+1)*width/2,(1-p.y)*height/2,p.z);}
+            const offsets=item.spring.step(item.screen,{x:(pointer.tx+1)*width/2,y:(1-pointer.ty)*height/2,on:pointer.on&&!gesture.active&&alpha>.9},dt,{reduced:reduced.matches,paused});
+            for(let i=0;i<256;i++){const p=item.screen[i];item.deformed[i].set((p.x+offsets[i*2])/width*2-1,1-(p.y+offsets[i*2+1])/height*2,p.z).unproject(camera);}
+            for(let i=0;i<=256;i++){
+                const p=item.deformed[i%256],next=item.deformed[(i+1)%256],previous=item.deformed[(i+255)%256];
+                for(let side=0;side<2;side++){positions.setXYZ(i*2+side,p.x,p.y,p.z);tangents.setXYZ(i*2+side,next.x-previous.x,next.y-previous.y,next.z-previous.z);}
+            }
+            positions.needsUpdate=true;tangents.needsUpdate=true;
+            item.material.uniforms.uTime.value=clock;item.material.uniforms.uPointer.value.set(pointer.tx,pointer.ty,gesture.active?0:pointer.strength);item.material.uniforms.uAlpha.value=alpha;
+            item.satellites.forEach((sprite,index)=>{sprite.visible=active;sprite.scale.setScalar((index===0?.09:.035)*globeScale);const phase=(clock*.012+index/6)%1,sample=phase*256,from=Math.floor(sample);sprite.position.copy(item.deformed[from]).lerp(item.deformed[(from+1)%256],sample-from);sprite.material.opacity=(.2+(.5+.5*Math.sin(clock*.3+index))*.65)*alpha;});
             // Hide tracks in showreel mode without sharing mutable visibility state.
             item.line.visible=active;
         }
@@ -229,7 +274,7 @@ function create(canvas, {models, reduced, onFocus=()=>{},onSelect=()=>{},onScrol
         canvas.dataset.yaw=yaw.toFixed(4);canvas.dataset.pitch=pitch.toFixed(4);
         canvas.dataset.pointer=[pointer.x,pointer.y,pointer.strength].map(value=>value.toFixed(3)).join(',');
         canvas.dataset.frozen=String(frozen);canvas.dataset.time=clock.toFixed(3);
-        return {clock,age,slot,dragging:gesture.dragging};
+        return {clock,age,slot,ready:earthReady,dragging:gesture.dragging};
     }
     const locate=event=>{
         pointer.tx=event.clientX/width*2-1;pointer.ty=1-event.clientY/height*2;pointer.on=event.target===canvas&&!blocked;
@@ -263,8 +308,8 @@ function create(canvas, {models, reduced, onFocus=()=>{},onSelect=()=>{},onScrol
     window.addEventListener('pointermove',locate,{passive:true});
     for(const type of ['pointerup','pointercancel','lostpointercapture'])canvas.addEventListener(type,end);
     canvas.dataset.engine='webgl';
-    return {resize,frame,resetClock(){lastTime=null;},needsFrame(){return !reduced.matches||Math.abs(targetYaw-yaw)+Math.abs(targetPitch-pitch)>.001;},dispose(){
-        disposed=true;mask.onload=null;canvas.removeEventListener('pointermove',move);canvas.removeEventListener('pointerdown',down);canvas.removeEventListener('pointerleave',leave);window.removeEventListener('pointermove',locate);for(const type of ['pointerup','pointercancel','lostpointercapture'])canvas.removeEventListener(type,end);
+    return {resize,frame,resetClock(){lastTime=null;},needsFrame(){return !earthReady||!reduced.matches||Math.abs(targetYaw-yaw)+Math.abs(targetPitch-pitch)>.001;},dispose(){
+        disposed=true;clearTimeout(maskTimeout);mask.onload=null;mask.onerror=null;canvas.removeEventListener('pointermove',move);canvas.removeEventListener('pointerdown',down);canvas.removeEventListener('pointerleave',leave);window.removeEventListener('pointermove',locate);for(const type of ['pointerup','pointercancel','lostpointercapture'])canvas.removeEventListener(type,end);
         const geometries=new Set(),materials=new Set(),maps=new Set();scene.traverse(object=>{if(object.geometry)geometries.add(object.geometry);for(const material of Array.isArray(object.material)?object.material:object.material?[object.material]:[]){materials.add(material);if(material.map)maps.add(material.map);}});
         geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());maps.forEach(t=>t.dispose());renderer.dispose();
     }};

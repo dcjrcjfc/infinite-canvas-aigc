@@ -206,8 +206,6 @@ body.agent-open .agent-fab { display:none; }
 .view-tools { position:fixed; left:16px; bottom:16px; height:40px; padding:4px; display:flex; gap:0; background:#232323; border:1px solid #363636; border-radius:14px; z-index:1190; }
 .view-tools button { width:32px; height:30px; padding:7px; }
 .view-tools button.active { background:#484848; color:#fff; }
-#minimap { display:none; position:fixed; left:16px; bottom:68px; border:1px solid #555; border-radius:12px; background:#171717; z-index:1190; cursor:crosshair; }
-#minimap.is-open { display:block; }
 .empty-badge,.empty-template-btn,.empty-chip { box-shadow:none; background:#202020; border-color:#444; }
 .empty-text { color:#ddd; font-size:20px; }.empty-subline,.empty-template-desc { color:#aaa; }
 .empty-template-title { color:#eee; }.empty-template-row { width:min(690px,calc(100vw - 180px)); }

@@ -2,6 +2,7 @@ const fs = require('node:fs');
 const http = require('node:http');
 const path = require('node:path');
 const crypto = require('node:crypto');
+const { sharedProjects } = require('./server/shared-projects');
 const { createConfig, publicConfig, generateImage, generateVideo, queryVideo, generateAudio, chat } = require('./server/providers');
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'application/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.png': 'image/png', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.woff2': 'font/woff2', '.mp4': 'video/mp4' };
 const LEGAL_FILES = new Set(['/THIRD_PARTY_NOTICES.txt', '/vendor-icons.js.LEGAL.txt', '/scene3d.js.LEGAL.txt', '/media-encoder.js.LEGAL.txt']);
@@ -36,6 +37,7 @@ function createServer(options = {}) {
     const env = options.env || process.env;
     const config = createConfig(env);
     const fetchImpl = options.fetch || fetch;
+    const shared = sharedProjects(options.sharedDir || path.join(env.DATA_DIR || path.join(__dirname, '.local'), 'shared-projects'));
     const root = path.resolve(options.staticRoot || path.join(__dirname, '无限画布'));
     const sessions = new Map(), buckets = new Map(), jobs = new Map();
     const jobFile = options.jobFile === null ? null : options.jobFile || path.join(env.DATA_DIR || path.join(__dirname, '.local'), 'video-jobs.json');
@@ -96,7 +98,7 @@ function createServer(options = {}) {
             const authenticated = !password || !!(session && session.expires > Date.now());
             const owner = password ? crypto.createHash('sha256').update(password).digest('hex') : 'local';
             if (route === '/api/config' && req.method === 'GET') {
-                json(200, { ...publicConfig(config), authenticationRequired: !!password, authenticated }); return;
+                json(200, { ...publicConfig(config), sharedProjects: true, authenticationRequired: !!password, authenticated }); return;
             }
             for (const [key, value] of buckets) if (value.until <= Date.now()) buckets.delete(key);
             for (const [key, value] of sessions) if (value.expires <= Date.now()) sessions.delete(key);
@@ -118,6 +120,10 @@ function createServer(options = {}) {
             if (route === '/api/session' && req.method === 'DELETE') {
                 sessions.delete(sessionId);
                 json(200, { authenticated: !password }, { 'Set-Cookie': 'canvas_session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0' }); return;
+            }
+            if (route.startsWith('/api/shared-projects')) {
+                const result = await shared.handle({route,method:req.method,owner:authenticated ? owner : null,token:req.headers['x-canvas-share'],readBody:()=>readJson(req,limit)});
+                if(!result)throw fail(404,'共享接口不存在');json(200,result);return;
             }
             if (!authenticated) throw fail(401, '请先输入本站访问密码');
             let result;

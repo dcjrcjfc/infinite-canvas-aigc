@@ -93,9 +93,6 @@ window.Creative = {
         document.body.classList.toggle('hide-links', !!State.view.hideLinks);
         document.getElementById('hide-links-toggle').classList.toggle('active', !!State.view.hideLinks);
         document.getElementById('snap-toggle').classList.toggle('active', !!State.view.snap);
-        document.getElementById('minimap-toggle').classList.toggle('active', !!State.view.minimap);
-        document.getElementById('minimap').classList.toggle('is-open', !!State.view.minimap);
-        this.drawMap();
     },
     layout() {
         this.pendingLayout = true;
@@ -107,12 +104,6 @@ window.Creative = {
         this.layoutRAF = null; this.pendingLayout = false;
         this.positionEditor();
         this.updateContext();
-        if (State.view?.minimap) {
-            const now = performance.now();
-            if (!this.lastMapDraw || now - this.lastMapDraw >= 80) { this.lastMapDraw = now; this.drawMap(); }
-            clearTimeout(this.mapTimer);
-            this.mapTimer = setTimeout(() => this.drawMap(), 90);
-        }
     },
     positionEditor() {
         const node = State.multiSelection.length > 1 ? null : this.selected(), actions = document.getElementById('node-actions');
@@ -137,23 +128,6 @@ window.Creative = {
         panel.style.setProperty('--editor-screen-left', `${Engine.snapToDevicePixel(box.left + box.width / 2 - Math.max(220,width) / 2)}px`);
         panel.style.setProperty('--editor-screen-top', `${Engine.snapToDevicePixel(box.bottom + 12)}px`);
         if (this.floating(panel, true)) panel.dataset.screenOverlay = 'true';
-    },
-    drawMap() {
-        const canvas = document.getElementById('minimap');
-        if (!canvas || !State.view?.minimap) return;
-        const ctx = canvas.getContext('2d'); if (!ctx) return;
-        const corners = [Engine.screenToCanvas(0, 0), Engine.screenToCanvas(window.innerWidth, window.innerHeight)];
-        const nodes = State.nodes.map((n) => ({...n, width:n.el.offsetWidth, height:n.el.offsetHeight}));
-        const byElement = new Map(nodes.map((n) => [n.el,n]));
-        const x = Math.min(corners[0].x, ...nodes.map((n) => n.x)) - 100, y = Math.min(corners[0].y, ...nodes.map((n) => n.y)) - 100;
-        const right = Math.max(corners[1].x, ...nodes.map((n) => n.x + n.width)) + 100, bottom = Math.max(corners[1].y, ...nodes.map((n) => n.y + n.height)) + 100;
-        const ratio = Math.min(240 / (right - x), 150 / (bottom - y));
-        this.mapBounds = { x, y, ratio };
-        ctx.fillStyle = '#171717'; ctx.fillRect(0, 0, 240, 150);
-        ctx.strokeStyle = '#555'; ctx.lineWidth = 1;
-        for (const link of State.links) { const a = byElement.get(link.fromEl.closest('.node')), b = byElement.get(link.toEl.closest('.node')); if (!a || !b) continue; ctx.beginPath(); ctx.moveTo((a.x-x)*ratio, (a.y-y)*ratio); ctx.lineTo((b.x-x)*ratio, (b.y-y)*ratio); ctx.stroke(); }
-        for (const n of nodes) { ctx.fillStyle = n.el === this.selected() ? '#eee' : '#888'; ctx.fillRect((n.x-x)*ratio, (n.y-y)*ratio, Math.max(4,n.width*ratio), Math.max(4,n.height*ratio)); }
-        ctx.strokeStyle = '#c6d3df'; ctx.strokeRect((corners[0].x-x)*ratio, (corners[0].y-y)*ratio, (corners[1].x-corners[0].x)*ratio, (corners[1].y-corners[0].y)*ratio);
     },
     openSearch(mode = 'focus') {
         this.searchMode = mode;
@@ -467,8 +441,7 @@ window.Creative = {
         document.querySelectorAll('.agent-chip').forEach((b,i)=>{b.onclick=()=>{document.querySelector('.agent-input').value=presets[i]; document.querySelector('.agent-input').focus();};});
         document.querySelectorAll('[data-tool]').forEach((b)=>{b.addEventListener('click',(e)=>{e.stopPropagation();Interaction.closeNodeMenu();if(b.dataset.tool==='timeline')window.Timeline?.open();if(b.dataset.tool==='editor')Interaction.toggleRailPopup('editor');if(b.dataset.tool==='glb')window.SceneStudio?.importFromCanvas();});});
         document.querySelectorAll('[data-close-dialog]').forEach((b)=>{b.onclick=()=>b.closest('dialog').close();});
-        for (const [id,key] of [['hide-links-toggle','hideLinks'],['snap-toggle','snap'],['minimap-toggle','minimap']]) document.getElementById(id).onclick=()=>{State.view ||= {};State.view[key]=!State.view[key];this.applyView();Workspace.scheduleSave();};
-        document.getElementById('minimap').onclick=(event)=>{if(!this.mapBounds)return;const rect=event.currentTarget.getBoundingClientRect(),{x,y,ratio}=this.mapBounds;const worldX=x+(event.clientX-rect.left)*240/rect.width/ratio,worldY=y+(event.clientY-rect.top)*150/rect.height/ratio;State.canvas.x=SUPPORTS_CSS_ZOOM?window.innerWidth/2/State.canvas.scale-worldX:window.innerWidth/2-worldX*State.canvas.scale;State.canvas.y=SUPPORTS_CSS_ZOOM?window.innerHeight/2/State.canvas.scale-worldY:window.innerHeight/2-worldY*State.canvas.scale;Interaction.requestRender({canvas:true});};
+        for (const [id,key] of [['hide-links-toggle','hideLinks'],['snap-toggle','snap']]) document.getElementById(id).onclick=()=>{State.view ||= {};State.view[key]=!State.view[key];this.applyView();Workspace.scheduleSave();};
         document.getElementById('node-actions').onclick=(e)=>{const action=e.target.closest('[data-node-action]')?.dataset.nodeAction,node=this.selected();if(!action||!node)return;e.stopPropagation();if(action==='duplicate'){Interaction.copySelectedNodes();Interaction.pasteCopiedNodes();}if(action==='download')this.downloadNode(node);if(action==='timeline')window.Timeline?.addSelected();if(action==='connect'){this.linkSource=node;this.openSearch('link');}if(action==='delete')Interaction.deleteSelected();this.layout();};
         const status=document.getElementById('project-status'),name=document.getElementById('project-name');
         new MutationObserver(()=>{document.getElementById('save-indicator').textContent=status.textContent;}).observe(status,{childList:true,subtree:true});

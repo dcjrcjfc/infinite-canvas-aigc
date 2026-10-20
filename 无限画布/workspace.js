@@ -119,6 +119,7 @@ window.Workspace = {
     },
     openSettings() { this.renderServices(); document.getElementById('settings-dialog').showModal(); },
     cancelAll() {
+        window.Production?.cancelQueue();
         for (const [id, controller] of [...this.pending]) {
             if (this.pending.get(id) === controller) this.pending.delete(id);
             controller.abort();
@@ -167,10 +168,14 @@ window.Workspace = {
             const task = JSON.parse(node.dataset.videoTask);
             const result = await this.pollVideo(node, task.id, controller.signal);
             if (!node.isConnected || controller.signal.aborted) return;
+            const before = Interaction.captureScene();
+            const generationInput = node._production?.pendingFingerprint || window.Production?.fingerprint(node);
             const container = node.querySelector('.media-container'); container.replaceChildren();
             const video = document.createElement('video'); video.src = result.url; video.controls = true; container.appendChild(video);
             delete node.dataset.videoTask;
+            window.Production?.recordResult(node, before.nodes.find(n => n.id === node.dataset.nodeId), result, generationInput, node._production?.pendingParameters);
             Interaction.updateNodeStatus(node, '已生成');
+            Interaction.pushCommand(before, Interaction.captureScene());
             Interaction.pushHistory('generate', '视频任务完成', { nodeId: node.dataset.nodeId, scene: Interaction.captureScene() });
             Interaction.refreshDownstreamReferences(node);
         } catch (error) {
@@ -198,7 +203,7 @@ window.Workspace = {
         this.download('画布原始备份.canvas.json', new Blob([JSON.stringify(this.recoveryProject)], { type:'application/json' }));
         Interaction.toast('原始备份已导出，请保留文件后再整理或修复项目', 'success', 5000);
     },
-    async importProject(file) {
+    async importProject(file, guard = () => {}) {
         if (!file) return;
         if (this.importing) throw new Error('正在导入项目，请稍候');
         if (file.size > 256 * 1024 * 1024) throw new Error('项目文件超过 256MB');
@@ -207,11 +212,13 @@ window.Workspace = {
         let committing = false;
         try {
             const project = await ProjectStore.portable(ProjectStore.validate(JSON.parse(await file.text())));
+            guard();
             if (this.projectId !== projectId) throw new Error('当前画布已切换，请重新导入');
             if (this.pending.size) throw new Error('请先停止等待当前生成或导出任务，再导入项目');
             // Freeze only the short commit phase; all file reading happens first.
             document.body.inert = true;
             await this.flushSave();
+            guard();
             const before = this.captureWorkspace();
             const candidate = { ...this.project(), name:project.name, scene:project.scene, history:project.history };
             this.saving = true; committing = true;
@@ -332,7 +339,7 @@ window.Workspace = {
                 const fresh = ProjectStore.validate({
                     format: ProjectStore.FORMAT, version: 1,
                     id: `project_${crypto.randomUUID()}`, name: '未命名画布', updatedAt: new Date().toISOString(), history: [],
-                    scene: { nodes: [], links: [], canvas: { x: -4500, y: -4500, scale: 1 }, view: { minimap: true } }
+                    scene: { nodes: [], links: [], canvas: { x: -4500, y: -4500, scale: 1 }, view: {} }
                 });
                 const revision = await ProjectStore.save(fresh, this.revision);
                 project = fresh; saved = { ...fresh, revision };

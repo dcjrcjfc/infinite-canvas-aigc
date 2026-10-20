@@ -216,8 +216,8 @@
         scene=window.LoginScene.create(canvas,{models:reference.models,reduced,onInvalidate:schedule,onFocus:updateFocus,onScroll(delta){navigation.wheel(delta,0,height,performance.now());schedule();},
             getDocks:()=>['left','right'].map(side=>$(`.model-focus.${side} img`)?.getBoundingClientRect()).filter(Boolean),
             onSelect(model){$('#model-selection-status').textContent=`${model.name}，将在下一轮展示`;canvas.dataset.selectedModel=model.name;}});
-        document.body.classList.add('scene-ready');
     }catch(error){
+        window.LoginBoot?.complete();document.body.classList.remove('scene-loading');document.body.classList.add('scene-fallback');
         canvas.dataset.engine='unavailable';console.error('Login scene could not start',error);
         const hint=document.createElement('p');hint.className='scene-error';hint.setAttribute('role','status');hint.textContent='当前浏览器未能启动三维背景；登录功能仍可使用。';stage.appendChild(hint);
         updateFocus([reference.models[29%reference.models.length],reference.models[6%reference.models.length]],0);
@@ -228,6 +228,9 @@
         const paused=!!document.querySelector('dialog[open]');
         const position=navigation.tick(time,reduced.matches,paused),mix=updateShowreel(position);
         const state=scene?.frame(time,{mix,paused});
+        if(state&&state.ready!==false&&!document.body.classList.contains('scene-ready')){
+            window.LoginBoot?.complete();document.body.classList.remove('scene-loading','scene-fallback');document.body.classList.add('scene-ready');
+        }
         if(state)elapsed=state.clock;else if(!paused&&!reduced.matches)elapsed+=lastFrame?Math.min(.05,(time-lastFrame)/1000):0;
         lastFrame=time;updateTypedCopy();
         stage.style.setProperty('--copy-reveal',String(reduced.matches?1:Math.max(0,Math.min(1,(elapsed-1.05)/.6))));

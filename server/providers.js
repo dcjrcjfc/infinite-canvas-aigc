@@ -11,7 +11,11 @@ function createConfig(env) {
         base: env[`${prefix}_API_BASE`] || (type === 'video' ? env.VIDEO_API_BASE : type === 'text' ? env.AGENT_API_BASE : base) || base,
         protocol: env[`${prefix}_API_STYLE`] || (type === 'video' ? env.VIDEO_API_STYLE || 'openai' : 'openai'),
         createPath: env[`${prefix}_CREATE_PATH`] || env.VIDEO_CREATE_PATH,
-        queryPath: env[`${prefix}_QUERY_PATH`] || env.VIDEO_QUERY_PATH
+        queryPath: env[`${prefix}_QUERY_PATH`] || env.VIDEO_QUERY_PATH,
+        maxOutputs: type === 'image' ? Math.max(1, Math.min(4, Math.floor(Number(env[`${prefix}_MAX_OUTPUTS`]) || 1))) : 1,
+        maskEditing: type === 'image' && env[`${prefix}_MASK_EDITING`] === 'true',
+        unitPrice: env[`${prefix}_PRICE_PER_REQUEST`] !== undefined && Number.isFinite(Number(env[`${prefix}_PRICE_PER_REQUEST`])) && Number(env[`${prefix}_PRICE_PER_REQUEST`]) >= 0 ? Number(env[`${prefix}_PRICE_PER_REQUEST`]) : null,
+        currency: /^[A-Z]{3}$/.test(env[`${prefix}_PRICE_CURRENCY`] || '') ? env[`${prefix}_PRICE_CURRENCY`] : 'CNY'
         ,ratios: type === 'video' ? list(env[`${prefix}_RATIOS`] || env.VIDEO_RATIOS, ['16:9', '9:16']) : [],
         durations: type === 'video' ? list(env[`${prefix}_DURATIONS`] || env.VIDEO_DURATIONS, ['4', '8', '12']).map(Number) : [],
         inputModes: type === 'video' ? list(env[`${prefix}_INPUT_MODES`] || env.VIDEO_INPUT_MODES, ['first-frame']) : [],
@@ -42,7 +46,7 @@ function createConfig(env) {
     return { models, timeout: Math.max(100, Number(env.UPSTREAM_TIMEOUT_MS) || 180000) };
 }
 function publicConfig(config) {
-    return { models: config.models.map(({ id, label, type, key, model, protocol, ratios, durations, maxReferences, inputModes, resolutions }) => ({ id, label, type, available: !!(key && model), reason: !key ? '服务端未配置 API Key' : !model ? '服务端未配置供应商的完整模型 ID' : '', ratios: type === 'image' ? Object.keys(RATIOS) : ratios, durations, maxReferences: type === 'video' ? maxReferences : type === 'image' ? 16 : 0, inputModes, resolutions: type === 'video' ? (resolutions.length ? resolutions : protocol === 'openai' ? ['720p'] : []) : [], audioStyle: type === 'audio' ? protocol : undefined })) };
+    return { models: config.models.map(({ id, label, type, key, model, protocol, ratios, durations, maxReferences, inputModes, resolutions, maxOutputs, maskEditing, unitPrice, currency }) => ({ maxOutputs, maskEditing, unitPrice, currency, id, label, type, available: !!(key && model), reason: !key ? '服务端未配置 API Key' : !model ? '服务端未配置供应商的完整模型 ID' : '', ratios: type === 'image' ? Object.keys(RATIOS) : ratios, durations, maxReferences: type === 'video' ? maxReferences : type === 'image' ? 16 : 0, inputModes, resolutions: type === 'video' ? (resolutions.length ? resolutions : protocol === 'openai' ? ['720p'] : []) : [], audioStyle: type === 'audio' ? protocol : undefined })) };
 }
 function resolveModel(config, id, type) {
     const item = config.models.find((model) => model.id === id && model.type === type);
@@ -92,19 +96,27 @@ function mediaUrl(value) {
 async function generateImage(config, body, fetchImpl) {
     const model = resolveModel(config, body?.model, 'image'), prompt = promptOf(body), images = references(body);
     if (!RATIOS[body.ratio]) throw fail(400, '不支持的图片比例');
-    const fields = { model: model.model, prompt, n: 1, ...(model.protocol === 'aspect-ratio' ? { aspect_ratio: body.ratio, image_size: '1K' } : { size: RATIOS[body.ratio] }) };
+    const count = body.count === undefined ? 1 : Number(body.count);
+    if (!Number.isInteger(count) || count < 1 || count > model.maxOutputs) throw fail(400, `该模型每次最多生成 ${model.maxOutputs} 张图片`);
+    if (body.mask && (!model.maskEditing || !images.length || !/^data:image\/png;base64,[a-z0-9+/=]+$/i.test(body.mask))) throw fail(400, '该模型未开启蒙版编辑，或蒙版不是有效 PNG');
+    const fields = { model: model.model, prompt, n: count, ...(model.protocol === 'aspect-ratio' ? { aspect_ratio: body.ratio, image_size: '1K' } : { size: RATIOS[body.ratio] }) };
     let options;
     if (images.length) {
         const form = new FormData();
         Object.entries(fields).forEach(([name, value]) => form.append(name, String(value)));
         images.forEach((src, index) => { const blob = imageBlob(src); form.append('image', blob, `reference_${index}.${blob.type.split('/')[1]}`); });
+        if (body.mask) form.append('mask', imageBlob(body.mask), 'mask.png');
         options = { method: 'POST', body: form };
     } else options = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(fields) };
     const result = await request(config, model, images.length ? '/v1/images/edits' : '/v1/images/generations', options, fetchImpl);
-    const output = result?.data?.[0];
-    const url = mediaUrl(output?.url) || (typeof output?.b64_json === 'string' && /^[a-z0-9+/=]+$/i.test(output.b64_json) ? `data:image/png;base64,${output.b64_json}` : null);
-    if (!url) throw fail(502, '上游没有返回有效图片');
-    return { url: url.startsWith('data:') ? url : await persistMedia(config, url, 'image', fetchImpl) };
+    const urls = [];
+    for (const output of (Array.isArray(result?.data) ? result.data : []).slice(0, count)) {
+        const url = mediaUrl(output?.url) || (typeof output?.b64_json === 'string' && /^[a-z0-9+/=]+$/i.test(output.b64_json) ? `data:image/png;base64,${output.b64_json}` : null);
+        if (url) urls.push(url.startsWith('data:') ? url : await persistMedia(config, url, 'image', fetchImpl));
+    }
+    if (!urls.length) throw fail(502, '上游没有返回有效图片');
+    const usage = result.usage && typeof result.usage === 'object' ? Object.fromEntries(Object.entries(result.usage).filter(([k,v]) => /^[\w_]{1,40}$/.test(k) && Number.isFinite(v) && v >= 0)) : null;
+    return { url: urls[0], urls, usage };
 }
 async function chat(config, body, fetchImpl) {
     const model = resolveModel(config, body?.model, 'text'), prompt = promptOf(body);

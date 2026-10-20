@@ -1,0 +1,23 @@
+const {test}=require('node:test');const assert=require('node:assert/strict');const fs=require('node:fs');const os=require('node:os');const path=require('node:path');
+const {createServer}=require('../proxy-server');
+test('shared projects persist, enforce invite permissions and reject stale concurrent writes and revoked links',async t=>{
+ const directory=fs.mkdtempSync(path.join(os.tmpdir(),'canvas-share-'));t.after(()=>fs.rmSync(directory,{recursive:true,force:true}));
+ const server=createServer({env:{APP_PASSWORD:'test-password',RATE_LIMIT_PER_MINUTE:'100'},sharedDir:directory,jobFile:null,audit:()=>{}});
+ await new Promise(r=>server.listen(0,'127.0.0.1',r));t.after(()=>{server.close();server.closeAllConnections();});const base=`http://127.0.0.1:${server.address().port}`;
+ const request=(route,method='GET',body,headers={})=>fetch(base+route,{method,headers:{'Content-Type':'application/json',...headers},...(body?{body:JSON.stringify(body)}:{})});
+ const login=await request('/api/session','POST',{password:'test-password'}),owner={Cookie:login.headers.get('set-cookie').split(';')[0]};
+ const project={format:'infinite-canvas-project',version:1,name:'Shared test',scene:{nodes:[],links:[]}};
+ assert.equal((await request('/api/shared-projects','POST',{project})).status,401);
+ const created=await(await request('/api/shared-projects','POST',{project},owner)).json();const route=`/api/shared-projects/${created.id}`;
+ const read=await(await request(route+'/invites','POST',{role:'read'},owner)).json(),edit=await(await request(route+'/invites','POST',{role:'edit'},owner)).json();
+ const readHeader={'X-Canvas-Share':read.token},editHeader={'X-Canvas-Share':edit.token};
+ assert.equal((await request(route)).status,403);assert.equal((await request(route,'GET',null,readHeader)).status,200);
+ assert.equal((await request(route,'PUT',{revision:1,project},readHeader)).status,403);
+ assert.equal((await request(route+'/invites','POST',{role:'edit'},editHeader)).status,403);
+ const results=await Promise.all([1,2].map(i=>request(route,'PUT',{revision:1,project:{...project,name:'revision '+i}},editHeader)));
+ assert.deepEqual(results.map(r=>r.status).sort(),[200,409]);
+ assert.equal((await(await request(route+'/status','GET',null,owner)).json()).revision,2);
+ const saved=JSON.parse(fs.readFileSync(path.join(directory,created.id+'.json'),'utf8'));assert.equal(saved.revision,2);assert.ok(!JSON.stringify(saved).includes(edit.token));
+ assert.equal((await request(route+'/invites','DELETE',null,owner)).status,200);assert.equal((await request(route,'GET',null,editHeader)).status,403);
+ assert.equal((await request(route,'GET',null,owner)).status,200);
+});

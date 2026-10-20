@@ -852,6 +852,7 @@ const Interaction = {
             status: snapshot.status || (snapshot.withPrompt !== false ? '生成节点' : '素材节点')
         });
         const nodeId = idOverride || (preserveId ? snapshot.id : null);
+        nodeEl._production = structuredClone(snapshot.production || {});
         if (nodeId) nodeEl.dataset.nodeId = nodeId;
         nodeEl.dataset.model = normalizeModelIdForNodeType(snapshot.model, snapshot.type);
         nodeEl.dataset.ratio = snapshot.ratio || '1:1';
@@ -1117,6 +1118,7 @@ const Interaction = {
                 prompt: promptInput ? promptInput.value : '',
                 textValue: textInput ? textInput.value : '',
                 media,
+                production: structuredClone(nodeEl._production || {}),
                 sceneSpec: nodeEl.dataset.sceneSpec ? JSON.parse(nodeEl.dataset.sceneSpec) : null,
                 voice: nodeEl.querySelector('.audio-voice')?.value || 'alloy',
                 speed: Number(nodeEl.querySelector('.audio-speed')?.value || 1),
@@ -1142,6 +1144,7 @@ const Interaction = {
             links,
             timeline: (State.timeline || []).map((clip) => ({ ...clip })),
             conversations: JSON.parse(JSON.stringify(State.conversations || [])),
+            tasks: structuredClone(State.productionTasks || []),
             view: { ...(State.view || {}) }
         };
     },
@@ -1151,6 +1154,7 @@ const Interaction = {
         this.movedNodes.clear();
         UI.nodeResizeObserver?.disconnect();
         window.Workspace?.cancelAll();
+        window.Production?.cancelQueue();
         this.closeNodeMenu();
         this.closeAllNodePopovers();
         this.stopLinking();
@@ -1162,6 +1166,7 @@ const Interaction = {
         State.nodes = [];
         State.timeline = (scene.timeline || []).map((clip) => ({ ...clip }));
         State.conversations = JSON.parse(JSON.stringify(scene.conversations || []));
+        State.productionTasks = structuredClone(scene.tasks || []).map(task => ({ ...task, state: ['running', 'waiting'].includes(task.state) ? 'interrupted' : task.state }));
         State.view = { ...(scene.view || {}) };
         this.clearMultiSelection();
 
@@ -1191,6 +1196,8 @@ const Interaction = {
         this.syncCanvasEmptyState();
         this.updateUndoRedoUI();
         window.Creative?.onRestore();
+        window.Production?.refresh();
+        window.ProductionLibrary?.refresh();
     },
 
     pushCommand(beforeScene, afterScene, workspace = {}) {
@@ -2319,6 +2326,7 @@ const Interaction = {
                 const beforeUpload = this.captureScene();
                 targetNode.querySelector('.media-container').innerHTML = file.type.startsWith('audio/') ? `<audio src="${url}" controls></audio>` : file.type.includes('video') ? `<video src="${url}" controls muted></video>` : `<img src="${url}" alt="上传图片">`;
                 targetNode._rawFile = file;
+                window.Production?.recordUpload(targetNode, beforeUpload.nodes.find(n => n.id === targetNode.dataset.nodeId));
                 this.updateNodeStatus(targetNode, '已上传');
                 this.refreshDownstreamReferences(targetNode);
                 this.pushCommand(beforeUpload, this.captureScene());
@@ -2347,25 +2355,36 @@ const Interaction = {
 
     async runAI(node) {
         if (!node || !window.Workspace) return;
+        if (Workspace.pending.has(node.dataset.nodeId)) return false;
         const btn = node.querySelector('.send-btn');
         if (!btn || btn.classList.contains('loading')) return;
-        if (node.dataset.videoTask) return Workspace.resumeVideo(node);
+        if (node.dataset.videoTask) { await Workspace.resumeVideo(node); return node.dataset.nodeStatus === '已生成'; }
+        if (node._production?.note) return false;
         const input = node.querySelector('.ai-panel .ai-input');
-        const ownPrompt = input?.value.trim();
+        let ownPrompt = input?.value.trim();
         if (!ownPrompt) return this.toast('请输入指令', 'warn');
         const type = node.dataset.nodeType || 'image';
-        const context = this.getUpstreamText(node);
-        const prompt = context ? `上游创作设定：\n${context}\n\n当前任务：\n${ownPrompt}` : ownPrompt;
-        const model = node.dataset.model;
+        let context = this.getUpstreamText(node);
+        let prompt = context ? `上游创作设定：\n${context}\n\n当前任务：\n${ownPrompt}` : ownPrompt;
+        let model = node.dataset.model;
         if (!Workspace.modelAvailable(model)) return;
         const previous = node.dataset.nodeStatus;
         const controller = new AbortController();
+        let generationInput;
+        let generationParameters;
         Workspace.pending.set(node.dataset.nodeId, controller);
         btn.classList.add('loading'); btn.disabled = true;
         this.updateNodeStatus(node, '生成中');
         try {
             await this.waitForEditedSources(node, controller.signal);
             this.refreshAllReferences();
+            ownPrompt = input?.value.trim();
+            if (!ownPrompt) throw new Error('请输入指令');
+            context = this.getUpstreamText(node); prompt = context ? `上游创作设定：\n${context}\n\n当前任务：\n${ownPrompt}` : ownPrompt;
+            model = node.dataset.model;
+            if (!Workspace.modelAvailable(model)) { this.updateNodeStatus(node, previous); return false; }
+            generationInput = window.Production?.fingerprint(node);
+            generationParameters = { prompt, model, ratio:node.dataset.ratio };
             let result;
             if (type === 'text') {
                 result = await Workspace.request('/api/chat', { model, prompt }, controller.signal);
@@ -2374,8 +2393,11 @@ const Interaction = {
             } else {
                 const files = await this.getNodeReferenceFiles(node);
                 const images = await Promise.all(files.map((file) => ProjectStore.fileDataUrl(file)));
-                const payload = { model, prompt, ratio: node.dataset.ratio, images };
+                const payload = { model, prompt, ratio: generationParameters.ratio, images };
+                if (type === 'image') payload.count = node._production?.count || 1;
                 if (type === 'video') {
+                    if (window.Production) Production.data(node).pendingFingerprint = generationInput;
+                    if (window.Production) Production.data(node).pendingParameters = generationParameters;
                     payload.duration = Number(node.querySelector('.video-duration')?.value || 4);
                     payload.mode = node.dataset.inputMode || 'first-frame';
                     if (node.dataset.resolution) payload.resolution = node.dataset.resolution;
@@ -2399,6 +2421,7 @@ const Interaction = {
                 node._rawFile = null;
             }
             delete node.dataset.videoTask;
+            window.Production?.recordResult(node, before.nodes.find(item => item.id === node.dataset.nodeId), result, generationInput, generationParameters);
             this.updateNodeStatus(node, '已生成');
             this.refreshDownstreamReferences(node);
             const after = this.captureScene();
@@ -2406,9 +2429,12 @@ const Interaction = {
             this.pushHistory('generate', `生成成功：${getModelMeta(model).label} / ${node.dataset.ratio} / ${ownPrompt.slice(0, 26)}`, { nodeId: node.dataset.nodeId, scene: after });
             Workspace.scheduleSave();
             this.toast('生成完成，已加入生成历史', 'success');
+            return true;
         } catch (error) {
             if (node.isConnected) this.updateNodeStatus(node, node.dataset.videoTask ? '待查询' : previous);
             this.toast(error.name === 'AbortError' ? '已停止等待；上游任务可能仍在执行，请先查看任务记录' : error.message, 'error', 5000);
+            node._generationError = error.message;
+            return false;
         } finally {
             if (Workspace.finishTask(node.dataset.nodeId, controller)) { btn.classList.remove('loading'); btn.disabled = false; }
             Workspace.scheduleSave();
@@ -2460,7 +2486,9 @@ const Interaction = {
             if (link.toEl.closest('.node') !== target) return;
             const source = link.fromEl.closest('.node');
             if (!source || seen.has(source.dataset.nodeId)) return;
-            seen.add(source.dataset.nodeId); visit(source);
+            seen.add(source.dataset.nodeId);
+            if (source._production?.note) return;
+            visit(source);
             const value = source.querySelector('.text-node-input')?.value.trim();
             if (value) text.push(`${source.dataset.nodeName}：${value}`);
         });
