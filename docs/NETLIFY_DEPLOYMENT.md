@@ -4,13 +4,17 @@
 
 已新建独立站点 `infinite-canvas-studio`，site ID 为 `bfbb2393-4a66-4eac-b4c7-ba7fcc05757c`，在线地址为 https://infinite-canvas-studio.netlify.app/zh-CN/login 。未关联 Git 持续部署，当前由官方 CLI 手工发布。原 Sites 和其他报价站点未修改。
 
-当前生产部署 ID：`6ad7252efad406500082b568`，原生部署状态 `ready`；部署日志：https://app.netlify.com/projects/infinite-canvas-studio/deploys/6ad7252efad406500082b568 。
+当前生产部署 ID：`6ad7252efad406500082b568`，原生部署状态 `ready`；部署日志：https://app.netlify.com/projects/infinite-canvas-studio/deploys/6ad7252efad406500082b568 。这是旧生产版本，**不包含本轮登录入场顺序修复**。
 
-登录页、画布及公开配置接口的线上 HTTP 验证通过，Functions 已发布；未登录访问共享接口返回 401。当前 `APP_PASSWORD` 和模型密钥未配置。完整 CLI 构建后的运行环境检测到数据库连接变量（`cloudStorageAvailable: true`），但数据库管理接口仍返回空正文 HTTP 400，生产分支 CLI 查询失败；原因未确定，不能将其归因于套餐。额外诊断部署被服务端拒绝，未形成新部署，当前生产站点仍为上述 `ready` 版本。临时诊断路由已从未发布源码中移除。
+用户授权更新后，最新实现已推送 GitHub `main`，提交 `ae9358953771e2673ddcc40930940c907fdafe18`。本地 164 项回归、语法检查、发布包构建和差异检查通过；GitHub Actions `39405124442` 的 Windows/Linux × Node 22/24 四组检查全部成功：https://github.com/dcjrcjfc/infinite-canvas-aigc/actions/runs/39405124442 。
+
+本次使用官方 CLI 对该站点执行 `deploy --prod --no-build --skip-functions-cache`。创建部署 API 返回 HTTP 403，调试响应明确为：`Account credit usage exceeded - new deploys are blocked until credits are added`。未创建新部署，生产 ID 未变；需账号补充额度或恢复可用额度后重新发布。账号能力列表中的 `credits.used: 0` 与实际部署接口的阻断响应不一致，不能据此宣称仍可部署。本轮未购买额度或更改套餐。
+
+旧生产版本的登录页、画布及公开配置接口 HTTP 验证通过，Functions 已发布；未登录访问共享接口返回 401。当前 `APP_PASSWORD` 和模型密钥未配置。完整 CLI 构建后的运行环境检测到数据库连接变量（`cloudStorageAvailable: true`），但数据库管理接口仍返回空正文 HTTP 400，生产分支 CLI 查询失败；数据库问题原因未确定，不能将其归因于套餐。临时诊断路由已从源码中移除。
 
 `cloudStorageAvailable` 仅表示运行环境存在连接变量，不能替代真实云端读写验收。浏览器本地编辑/保存可用；云共享和生成未启用、未验收。登录密码和模型配置完成后，仍须验证数据库迁移及实际读写，再宣称云端能力可用。
 
-本轮完整 162 项回归及语法检查通过。线上浏览器验收受限：Edge 连接不可用，Codex 内置浏览器打开超时，因此线上结果依据 HTTP 和部署 API，未声称已完成浏览器端渲染验收。
+此前旧生产包的线上浏览器验收受限：Edge 连接不可用，Codex 内置浏览器打开超时，因此此前线上结果依据 HTTP 和部署 API。本轮发布被额度阻断，未声称已在线上验收新的入场效果。
 
 本项目保留本地 Node 服务，同时支持独立的 Netlify 部署。
 
